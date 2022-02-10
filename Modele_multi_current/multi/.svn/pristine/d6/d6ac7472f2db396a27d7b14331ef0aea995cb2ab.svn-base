@@ -1,0 +1,57 @@
+//
+//  Ecosystem.hpp
+//  Cell_Evolution
+//
+//  Created by Florian on 28/02/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#ifndef Ecosystem_hpp
+#define Ecosystem_hpp
+
+#include <cstdio>
+#include <string>
+#include <math.h>
+#include "Puddle.hpp"
+
+class DonutPuddle : public Puddle
+{
+public:
+    
+    //Constructor of Etienne Rajon's bewildering (or wild!) donut: but is it hotter in the outside inside the hole or in the fryer?//
+    DonutPuddle(int simulationNumber, double const lengthCompartment, double delta_t, double delta_l, int lengthPuddle,int widthPuddle, Compartiment insideCompartment, Compartiment outsideCompartment, int initialNumberCell, Cell cell);
+    
+    //Diffusion
+    void DiffusionBetweenCompartments();
+    
+private:
+    
+};
+
+class FinitePuddle : public Puddle
+{
+public:
+    
+    //Constructor of a real puddle! Why should we bother to build something that does not exist? I shall put you on the right track. Never forget about mathamatical "elegancy". This is key to merely everything.//
+    FinitePuddle(int simulationNumber, double const lengthCompartment, double delta_t,double delta_l, int length, int width, Compartiment insideCompartment, Compartiment outsideCompartment, int initialNumberCell, Cell cell);
+    
+    //Diffusion
+    void DiffusionBetweenCompartments();
+    
+private:
+};
+
+class SeabedPuddle : public Puddle
+{
+    
+    //Constructor of your devoted servant's infinite puddle? Are you mad? What the hell is an infinite puddle?//
+public:
+    
+    SeabedPuddle(int simulationNumber, double const lengthCompartment, double delta_t,double delta_l, int length, int width, Compartiment insideCompartment, Compartiment outsideCompartment, Compartiment lateralCompartment, int initialNumberCell, Cell cell);
+    //Diffusion
+    void DiffusionBetweenCompartments();
+    
+private:
+};
+
+#endif /* Environment_hpp */

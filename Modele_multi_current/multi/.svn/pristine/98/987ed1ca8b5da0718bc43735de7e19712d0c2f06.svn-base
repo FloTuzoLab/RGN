@@ -1,0 +1,538 @@
+//
+//  Ecosystem.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 28/02/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#include "Ecosystem.hpp"
+
+using namespace std;
+
+double OperatorFiniteDifferencesExplicit(double alpha_int,double alpha_out, double c, int nbInsideNeighbours, int nbOutsideNeighbours, double n1,double n2,double n3,double n4,double c_extup,double c_extdown){
+    return(alpha_int*(n1+n2+n3+n4)+alpha_out*(c_extup+c_extdown)+(1-nbInsideNeighbours*alpha_int-nbOutsideNeighbours*alpha_out)*c);
+}
+
+/* ##Methods for the DonutPuddle class## */
+
+// #Constructor# //
+
+DonutPuddle::DonutPuddle(int simulationNumber,
+                         bool cellSizerCycle,
+                         double delta_t,
+                         double delta_l,
+                         int timeStepRatio,                  //Ratio between timestep for proteins and transcripts dynamics (quite slow) and other processes especially diffusion (which is highly time sensitive)
+                         int lengthPuddle,                      //Length of the puddle (in compartment units)
+                         int widthPuddle,                       //Width of the puddle (in copartment units)
+                         Compartiment insideCompartment,        //Properties of a compartment in the puddle
+                         Compartiment outsideCompartment,       //Properties of a compartment
+                         int initialNumberCell,
+                         Cell cell):
+
+    Puddle(simulationNumber,
+           cellSizerCycle,
+           delta_t,
+           delta_l,
+           timeStepRatio,
+           lengthPuddle,
+           widthPuddle,
+           false,
+           insideCompartment,
+           outsideCompartment,
+           initialNumberCell,
+           cell)
+    {
+        m_neighbours=new int***[m_lengthInside+1];
+        m_neighbours[0]=new int**[1];
+        m_neighbours[0][0]=new int*[1];
+        m_neighbours[0][0][0]=0;
+        
+        for (int i=1;i<=m_lengthInside;i++){
+            m_neighbours[i]=new int**[m_widthInside+1];
+            for (int j=1;j<=m_widthInside;j++){
+                m_neighbours[i][j]=new int*[4];
+                for (int k=0;k<=3;k++){
+                    m_neighbours[i][j][k]=new int[2];
+                }
+            }
+        }
+        
+        for (int i=1;i<=m_lengthInside;i++){
+            
+            for (int j=1;j<=m_widthInside;j++){
+                
+                //First neighbour
+                if (i==1){
+                    m_neighbours[i][j][0][0]=m_lengthInside;
+                    m_neighbours[i][j][0][1]=j;
+                }
+                else{
+                    m_neighbours[i][j][0][0]=i-1;
+                    m_neighbours[i][j][0][1]=j;
+                }
+            
+                //Second neighbour
+                if (i==m_lengthInside){
+                    m_neighbours[i][j][1][0]=1;
+                    m_neighbours[i][j][1][1]=j;
+                }
+                else{
+                    m_neighbours[i][j][1][0]=i+1;
+                    m_neighbours[i][j][1][1]=j;
+                }
+            
+                //Third neighbour
+                if (j==1){
+                    m_neighbours[i][j][2][0]=i;
+                    m_neighbours[i][j][2][1]=m_widthInside;
+                }
+                else{
+                    m_neighbours[i][j][2][0]=i;
+                    m_neighbours[i][j][2][1]=j-1;
+                }
+            
+                //Fourth neighbour
+                if (j==m_widthInside){
+                    m_neighbours[i][j][3][0]=i;
+                    m_neighbours[i][j][3][1]=1;
+                }
+                else{
+                    m_neighbours[i][j][3][0]=i;
+                    m_neighbours[i][j][3][1]=j+1;
+                }
+            m_puddle[i][j].SetNeighboursRelationships(0, m_neighbours[i][j][0][0], m_neighbours[i][j][0][1]);
+            m_puddle[i][j].SetNeighboursRelationships(1, m_neighbours[i][j][1][0], m_neighbours[i][j][1][1]);
+            m_puddle[i][j].SetNeighboursRelationships(2, m_neighbours[i][j][2][0], m_neighbours[i][j][2][1]);
+            m_puddle[i][j].SetNeighboursRelationships(3, m_neighbours[i][j][3][0], m_neighbours[i][j][3][1]);
+            
+            //Setting the spatio temporal diffusion coefficient for each of the molecules in each compartment.
+            
+        }
+    }
+}
+
+DonutPuddle::~DonutPuddle()
+{
+    delete m_neighbours[0][0][0];
+    delete m_neighbours[0][0];
+    delete m_neighbours[0];
+    for (int i=1;i<=m_lengthInside;i++){
+        for (int j=1;j<=m_widthInside;j++){
+            for (int k=0;k<=3;k++){
+                delete[] m_neighbours[i][j][k];
+            }
+            delete[] m_neighbours[i][j];
+        }
+        delete[] m_neighbours[i];
+    }
+    delete[] m_neighbours;
+    
+}
+
+//RAJON'S DONUT SEEMS TO BE CORRECTLY DEFINED. OH DEAR...//
+
+void DonutPuddle::DiffusionBetweenCompartments()
+{
+    //#I. Molecules diffusion between compartments# //
+    // 1.Initialization //
+    double conc[4][m_lengthInside+1][m_widthInside+1];
+    
+    //int neigh[4][2];//Only useful in the test version, based on the neighbours recovery//
+    cout << "conc pré:" << m_puddle[1][1].GetConcentrationNutrientStandard() << endl;
+    conc[0][0][0]=m_puddle[0][0].GetConcentrationNutrientStandard();
+    
+    conc[1][0][0]=m_puddle[0][0].GetConcentrationNutrientHidden();
+    
+    conc[2][0][0]=m_puddle[0][0].GetConcentrationNutrientRevealed();
+    
+    conc[3][0][0]=m_puddle[0][0].GetConcentrationCommonGoods();
+    
+    for (int i=1;i<=m_lengthInside;i++)
+    {
+        for (int j=1;j<=m_widthInside;j++)
+            
+        {
+            //Setting the prior concentration for each of the molecule type.
+            
+            conc[0][i][j]=m_puddle[i][j].GetConcentrationNutrientStandard();
+            
+            conc[1][i][j]=m_puddle[i][j].GetConcentrationNutrientHidden();
+            
+            conc[2][i][j]=m_puddle[i][j].GetConcentrationNutrientRevealed();
+            
+            conc[3][i][j]=m_puddle[i][j].GetConcentrationCommonGoods();
+        }
+    }
+    
+    // 2.Calculus of the new concentrations //
+    for (int i=1;i<=m_lengthInside;i++)
+    {
+        for (int j=1;j<=m_widthInside;j++)
+            
+        {
+            double concNutStand(OperatorFiniteDifferencesExplicit(m_alphaDF[0][0],m_alphaDF[0][1],conc[0][i][j],4,1,conc[0][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[0][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[0][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[0][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[0][0][0],0));
+            
+            double concNutHid(OperatorFiniteDifferencesExplicit(m_alphaDF[1][0],m_alphaDF[1][1],conc[1][i][j],4,1,conc[1][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[1][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[1][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[1][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[1][0][0],0));
+            
+            double concNutRev(OperatorFiniteDifferencesExplicit(m_alphaDF[2][0],m_alphaDF[2][1],conc[2][i][j],4,1,conc[2][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[2][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[2][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[2][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[2][0][0],0));
+            
+            double concComGoo(OperatorFiniteDifferencesExplicit(m_alphaDF[3][0],m_alphaDF[3][1],conc[3][i][j],4,1,conc[3][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[3][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[3][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[3][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[3][0][0],0));
+            
+            m_puddle[i][j].SetConcentrationNutrientStandard(concNutStand);
+            m_puddle[i][j].SetConcentrationNutrientHidden(concNutHid);
+            m_puddle[i][j].SetConcentrationNutrientRevealed(concNutRev);
+            m_puddle[i][j].SetConcentrationCommonGoods(concComGoo);
+            }
+            }
+    cout << "conc post:" << m_puddle[1][1].GetConcentrationNutrientStandard() << endl;
+    //#I. Cells diffusion between compartments# //
+    vector <int> cellDiffusionTemporaryArray;
+    //cout << m_cellDiffusionRate << endl;
+    for (int cell=1; cell<=m_cell.size();cell++){
+        if (gsl_ran_binomial(_SimuRandom_,m_cellDiffusionRate,1)==1){
+            cellDiffusionTemporaryArray.push_back(cell);
+            //cout << cellDiffusionTemporaryArray[0];
+        }
+    }
+    for (int c=0; c<cellDiffusionTemporaryArray.size();c++){
+        int cellDiffused=cellDiffusionTemporaryArray[c]-1;
+        int cellNeighbourChoice;
+        cellNeighbourChoice=gsl_ran_flat(_SimuRandom_,0,4);
+        switch(cellNeighbourChoice){
+            case 0:
+                for (int coordinate=0;coordinate<=1;coordinate++){
+                    m_positionCell[cellDiffused][coordinate]=m_neighbours[m_positionCell[cellDiffused][0]][m_positionCell[cellDiffused][1]][0][coordinate];
+                }
+                break;
+            case 1:
+                for (int coordinate=0;coordinate<=1;coordinate++){
+                    m_positionCell[cellDiffused][coordinate]=m_neighbours[m_positionCell[cellDiffused][0]][m_positionCell[cellDiffused][1]][1][coordinate];
+                }
+                break;
+            case 2:
+                for (int coordinate=0;coordinate<=1;coordinate++){
+                    m_positionCell[cellDiffused][coordinate]=m_neighbours[m_positionCell[cellDiffused][0]][m_positionCell[cellDiffused][1]][2][coordinate];
+                }
+                break;
+            case 3:
+                for (int coordinate=0;coordinate<=1;coordinate++){
+                    m_positionCell[cellDiffused][coordinate]=m_neighbours[m_positionCell[cellDiffused][0]][m_positionCell[cellDiffused][1]][3][coordinate];
+                }
+                break;
+        }
+    }
+}
+/*End of Donut methods*/
+
+/*Methods for the FinitePuddle class*/
+
+//Constructor//
+
+
+FinitePuddle::FinitePuddle(int simulationNumber,
+                           bool cellSizerCycle,
+                           double delta_t,
+                           double delta_l,
+                           int timeStepRatio,
+                           int lengthPuddle,
+                           int widthPuddle,
+                           Compartiment insideCompartment,
+                           Compartiment outsideCompartment,
+                           int initialNumberCell,
+                           Cell cell):
+        Puddle(simulationNumber,
+               cellSizerCycle,
+               delta_t,
+               delta_l,
+               timeStepRatio,
+               lengthPuddle,
+               widthPuddle,
+               false,
+               insideCompartment,
+               outsideCompartment,
+               initialNumberCell,cell)
+{
+    m_neighbours=new int***[m_lengthInside+1];
+    for (int i=1;i<=m_lengthInside;i++)
+    {
+        m_neighbours[i]=new int**[m_widthInside+1];
+        for (int j=1;j<=m_widthInside;j++)
+        {
+            m_neighbours[i][j]=new int*[4];
+            for (int k=0;k<=3;k++)
+            {
+                m_neighbours[i][j][k]=new int[2];
+            }
+        }
+    }
+    
+for (int i=1;i<=m_lengthInside;i++)
+{
+    for (int j=1;j<=m_widthInside;j++)
+    {
+        if (i==1)
+        {
+            m_neighbours[i][j][0][0]=i;
+            m_neighbours[i][j][0][1]=j;
+        }
+        else
+        {
+            m_neighbours[i][j][0][0]=i-1;
+            m_neighbours[i][j][0][1]=j;
+        }
+        
+        if (i==m_lengthInside)
+        {
+            m_neighbours[i][j][1][0]=i;
+            m_neighbours[i][j][1][1]=j;
+        }
+        else
+        {
+            m_neighbours[i][j][1][0]=i+1;
+            m_neighbours[i][j][1][1]=j;
+        }
+        
+        if (j==1)
+        {
+            m_neighbours[i][j][2][0]=i;
+            m_neighbours[i][j][2][1]=j;
+        }
+        else
+        {
+            m_neighbours[i][j][2][0]=i;
+            m_neighbours[i][j][2][1]=j-1;
+        }
+        
+        if (j==m_widthInside)
+        {
+            m_neighbours[i][j][3][0]=i;
+            m_neighbours[i][j][3][1]=j;
+        }
+        else
+        {
+            m_neighbours[i][j][3][0]=i;
+            m_neighbours[i][j][3][1]=j+1;
+        }
+        m_puddle[i][j].SetNeighboursRelationships(0, m_neighbours[i][j][0][0], m_neighbours[i][j][0][1]);
+        m_puddle[i][j].SetNeighboursRelationships(1, m_neighbours[i][j][1][0], m_neighbours[i][j][1][1]);
+        m_puddle[i][j].SetNeighboursRelationships(2, m_neighbours[i][j][2][0], m_neighbours[i][j][2][1]);
+        m_puddle[i][j].SetNeighboursRelationships(3, m_neighbours[i][j][3][0], m_neighbours[i][j][3][1]);
+        
+        //Setting the spatio temporal diffusion coefficient for each of the molecules in each compartment.
+        
+    }
+}
+ //Neighbours definition possibility, in order to check the accuracy of the diffusion//
+}
+
+FinitePuddle::~FinitePuddle()
+{
+    for (int i=0;i<=m_lengthInside;i++){
+        for (int j=0;j<=m_widthInside;j++){
+            for (int k=0;k<=3;k++){
+                delete[] m_neighbours[i][j][k];
+            }
+            delete[] m_neighbours[i][j];
+        }
+        delete[] m_neighbours[i];
+    }
+    //delete[] m_neighbours[0];
+    delete[] m_neighbours;     
+}
+
+void FinitePuddle::DiffusionBetweenCompartments()
+{
+        double conc[4][m_lengthInside+1][m_widthInside+1];
+        
+        //int neigh[4][2];//Only useful in the test version, based on the neighbours recovery//
+        
+        conc[0][0][0]=m_puddle[0][0].GetConcentrationNutrientStandard();
+        
+        conc[1][0][0]=m_puddle[0][0].GetConcentrationNutrientHidden();
+        
+        conc[2][0][0]=m_puddle[0][0].GetConcentrationNutrientRevealed();
+        
+        conc[3][0][0]=m_puddle[0][0].GetConcentrationCommonGoods();
+        
+        for (int i=1;i<=m_lengthInside;i++)
+        {
+            for (int j=1;j<=m_widthInside;j++)
+                
+            {
+                //Setting the prior concentration for each of the molecule type.
+                
+                conc[0][i][j]=m_puddle[i][j].GetConcentrationNutrientStandard();
+                
+                conc[1][i][j]=m_puddle[i][j].GetConcentrationNutrientHidden();
+                
+                conc[2][i][j]=m_puddle[i][j].GetConcentrationNutrientRevealed();
+                
+                conc[3][i][j]=m_puddle[i][j].GetConcentrationCommonGoods();
+            }
+        }
+    
+    for (int i=1;i<=m_lengthInside;i++)
+    {
+        for (int j=1;j<=m_widthInside;j++)
+            
+        {
+            
+            double concNutStand(OperatorFiniteDifferencesExplicit(m_alphaDF[0][0],m_alphaDF[0][1],conc[0][i][j],4,1,conc[0][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[0][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[0][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[0][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[0][0][0],0));
+            
+            double concNutHid(OperatorFiniteDifferencesExplicit(m_alphaDF[1][0],m_alphaDF[1][1],conc[1][i][j],4,1,conc[1][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[1][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[1][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[1][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[1][0][0],0));
+            
+            double concNutRev(OperatorFiniteDifferencesExplicit(m_alphaDF[2][0],m_alphaDF[2][1],conc[2][i][j],4,1,conc[2][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[2][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[2][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[2][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[2][0][0],0));
+            
+            double concComGoo(OperatorFiniteDifferencesExplicit(m_alphaDF[3][0],m_alphaDF[3][1],conc[3][i][j],4,1,conc[3][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[3][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[3][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[3][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[3][0][0],0));
+            
+            m_puddle[i][j].SetConcentrationNutrientStandard(concNutStand);
+            m_puddle[i][j].SetConcentrationNutrientHidden(concNutHid);
+            m_puddle[i][j].SetConcentrationNutrientRevealed(concNutRev);
+            m_puddle[i][j].SetConcentrationCommonGoods(concComGoo);
+        }
+    }
+}
+    
+
+/*End of FinitePuddle class*/
+
+/*Methods for PseudoInfinitePuddle (seabed) class*/
+
+SeabedPuddle::SeabedPuddle(int simulationNumber,
+                           bool cellSizerCycle,
+                           double delta_t,
+                           double delta_l,
+                           int timeStepRatio,
+                           int lengthPuddle,
+                           int widthPuddle,
+                           Compartiment insideCompartment,
+                           Compartiment outsideCompartment,
+                           Compartiment lateralCompartment,
+                           int initialNumberCell,
+                           Cell cell):
+        Puddle(simulationNumber,
+               cellSizerCycle,
+               delta_t,
+               delta_l,
+               timeStepRatio,
+               lengthPuddle,
+               widthPuddle,
+               true,
+               insideCompartment,
+               outsideCompartment,
+               initialNumberCell,
+               cell)
+{
+    for (int i=1;i<=m_lengthInside;i++)
+    {
+        m_puddle[i][0]=Compartiment(lateralCompartment);
+        m_puddle[i][m_widthInside+1]=Compartiment(lateralCompartment);
+    }
+    
+    for (int j=1;j<=m_widthInside;j++)
+    {
+        m_puddle[0][j]=Compartiment(lateralCompartment);
+        m_puddle[m_lengthInside+1][j]=Compartiment(lateralCompartment);
+    }
+    
+    m_neighbours=new int***[m_lengthInside+1];
+    for (int i=1;i<=m_lengthInside;i++)
+    {
+        m_neighbours[i]=new int**[m_widthInside+1];
+        for (int j=1;j<=m_widthInside;j++)
+        {
+            m_neighbours[i][j]=new int*[4];
+            for (int k=0;k<=3;k++)
+            {
+                m_neighbours[i][j][k]=new int[2];
+            }
+        }
+    }
+    
+    
+    
+    for (int i=1;i<=m_lengthInside;i++)
+    {
+        for (int j=1;j<=m_widthInside;j++)
+        {
+            
+                m_neighbours[i][j][0][0]=i-1;
+                m_neighbours[i][j][0][1]=j;
+            
+                m_neighbours[i][j][1][0]=i+1;
+                m_neighbours[i][j][1][1]=j;
+            
+                m_neighbours[i][j][2][0]=i;
+                m_neighbours[i][j][2][1]=j-1;
+            
+                m_neighbours[i][j][3][0]=i;
+                m_neighbours[i][j][3][1]=j+1;
+            
+            m_puddle[i][j].SetNeighboursRelationships(0, m_neighbours[i][j][0][0], m_neighbours[i][j][0][1]);
+            m_puddle[i][j].SetNeighboursRelationships(1, m_neighbours[i][j][1][0], m_neighbours[i][j][1][1]);
+            m_puddle[i][j].SetNeighboursRelationships(2, m_neighbours[i][j][2][0], m_neighbours[i][j][2][1]);
+            m_puddle[i][j].SetNeighboursRelationships(3, m_neighbours[i][j][3][0], m_neighbours[i][j][3][1]);
+            
+        }
+    }
+}
+
+SeabedPuddle::~SeabedPuddle()
+{
+    delete[] m_neighbours[0];
+    for (int i=1;i<=m_lengthInside;i++){
+        for (int j=1;j<=m_widthInside;j++){
+            for (int k=0;k<=3;k++){
+                delete[] m_neighbours[i][j][k];
+            }
+            delete[] m_neighbours[i][j];
+        }
+        delete[] m_neighbours[i];
+    }
+    
+    delete[] m_neighbours;
+}
+
+void SeabedPuddle::DiffusionBetweenCompartments()
+{
+    double conc[4][m_lengthInside+2][m_widthInside+2];
+    
+    for (int i=0;i<=m_lengthInside+1;i++)
+    {
+        for (int j=0;j<=m_widthInside+1;j++)
+            
+        {
+            //Setting the prior concentration for each of the molecule type.
+            
+            conc[0][i][j]=m_puddle[i][j].GetConcentrationNutrientStandard();
+            
+            conc[1][i][j]=m_puddle[i][j].GetConcentrationNutrientHidden();
+            
+            conc[2][i][j]=m_puddle[i][j].GetConcentrationNutrientRevealed();
+            
+            conc[3][i][j]=m_puddle[i][j].GetConcentrationCommonGoods();
+        }
+    }
+    
+    
+    for (int i=1;i<=m_lengthInside;i++)
+    {
+        for (int j=1;j<=m_widthInside;j++)
+            
+        {
+            double concNutStand(OperatorFiniteDifferencesExplicit(m_alphaDF[0][0],m_alphaDF[0][1],conc[0][i][j],4,1,conc[0][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[0][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[0][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[0][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[0][0][0],0));
+            
+            double concNutHid(OperatorFiniteDifferencesExplicit(m_alphaDF[1][0],m_alphaDF[1][1],conc[1][i][j],4,1,conc[1][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[1][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[1][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[1][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[1][0][0],0));
+            
+            double concNutRev(OperatorFiniteDifferencesExplicit(m_alphaDF[2][0],m_alphaDF[2][1],conc[2][i][j],4,1,conc[2][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[2][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[2][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[2][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[2][0][0],0));
+            
+            double concComGoo(OperatorFiniteDifferencesExplicit(m_alphaDF[3][0],m_alphaDF[3][1],conc[3][i][j],4,1,conc[3][m_neighbours[i][j][0][0]][m_neighbours[i][j][0][1]],conc[3][m_neighbours[i][j][1][0]][m_neighbours[i][j][1][1]],conc[3][m_neighbours[i][j][2][0]][m_neighbours[i][j][2][1]],conc[3][m_neighbours[i][j][3][0]][m_neighbours[i][j][3][1]],conc[3][0][0],0));
+            
+            m_puddle[i][j].SetConcentrationNutrientStandard(concNutStand);
+            m_puddle[i][j].SetConcentrationNutrientHidden(concNutHid);
+            m_puddle[i][j].SetConcentrationNutrientRevealed(concNutRev);
+            m_puddle[i][j].SetConcentrationCommonGoods(concComGoo);
+        }
+    }
+}

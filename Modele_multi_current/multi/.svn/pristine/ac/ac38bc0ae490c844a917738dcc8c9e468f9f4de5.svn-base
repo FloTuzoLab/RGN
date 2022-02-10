@@ -1,0 +1,9 @@
+//
+//  Allele.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 19/03/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#include "Allele.hpp"

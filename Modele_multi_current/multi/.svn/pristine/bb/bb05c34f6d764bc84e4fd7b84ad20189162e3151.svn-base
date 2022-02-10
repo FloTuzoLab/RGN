@@ -1,0 +1,71 @@
+//
+//  Allele.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 19/03/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#include "Allele.hpp"
+
+using namespace std;
+
+// #Default constructor not implemented with the random simulation number# //
+Allele::Allele():
+                m_mutationRate(pow(10,-6))
+{
+    for (int position=0;position<=999;position++){
+        m_regulatorySequence.push_back('A');
+    }
+}
+
+Allele::Allele(std::string regulatorySequence,double mutationRate):
+    m_mutationRate(mutationRate)
+{
+    //rnd=randomSimulation;
+    for (int position=0;position<=999;position++){
+        m_regulatorySequence.push_back(regulatorySequence[position]);
+    }
+}
+
+Allele::Allele(const Allele& m_allele)
+{
+    //rnd=randomSimulation;
+    for (int position=0;position<=999;position++){
+        m_regulatorySequence[position]=m_allele.m_regulatorySequence[position];
+    }
+}
+
+Allele::~Allele()
+{
+    //Useless here
+}
+
+void Allele::operator=(const Allele& m_allele)
+{
+    for (int position=0;position<=999;position++){
+        m_regulatorySequence[position]=m_allele.m_regulatorySequence[position];
+    }
+}
+
+void Allele::PrintAllele()
+{
+    cout << "Mutation rate:" << m_mutationRate << endl;
+    cout << "Regulatory sequence:" << m_regulatorySequence << endl;
+}
+
+RegulatoryAllele::RegulatoryAllele(std::string regulatorySequence,
+                                   double mutationRate,
+                                   std::string bindingSequence):
+Allele(regulatorySequence,mutationRate)
+{
+    m_bindingSequence=bindingSequence;
+}
+
+PhysiologicalAllele::PhysiologicalAllele(std::string regulatorySequence,
+                                         double mutationRate,
+                                         bool efficiencyGene):
+Allele(regulatorySequence,mutationRate)
+{
+    m_efficiencyGene=efficiencyGene;
+}

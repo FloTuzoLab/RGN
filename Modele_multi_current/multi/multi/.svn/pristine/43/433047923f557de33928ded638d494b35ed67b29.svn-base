@@ -1,0 +1,303 @@
+//
+//  Cell.hpp
+//  Cell_Evolution
+//
+//  Created by Florian on 02/03/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#ifndef Cell_hpp
+#define Cell_hpp
+
+#include <iostream>
+#include <cstdio>
+#include <string>
+#include <algorithm>
+#include <vector>
+#include <map>
+
+#include <math.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+#include <random>
+
+#include "Allele.hpp"
+
+class Cell
+{
+    
+
+public:
+    
+    /* ###Methods### */
+    
+    
+        /* ##Constructors## */
+    
+    
+            // #Default constructor# //  //Need to see if not counterproductive by introducing a risk of non-working situations
+            Cell();
+    
+            Cell(int ref[2]);
+    
+            // #Partially configurable constructor# //
+            Cell(double m_K__on,
+                 double m_K__off,
+                 double permeability,
+                 double allometryProductionCoefficient,
+                 double allometryBasalCoefficient,
+                 double etaNutrientToGarbage,
+                 int synthesisDuration,
+                 double tauTranscriptionOncePolymeraseBound,
+                 double basalBindingProbabilityPolymerase,
+                 double enhancedBindingProbabilityPolymerase,
+                 double tauTraduction,
+                 double etaTranslationActivityPostCheckpoint,
+                 double tauDegradationTranscript,
+                 double tauDegradationProtein,
+                 std::map <std::string,double> metaboliteCost,
+                 double SA_calibration,
+                 double basalMetabolismSAcalibration,
+                 double cellVolume,
+                 double volumeProportionDescendant,
+                 double garbageProportionDescendant,
+                 double volumeCellMitosis,
+                 double volumeMutationRate,
+                 double sizerThresholdMitosis,
+                 std::string cellCycle,
+                 std::map <std::string,PhysiologicalAllele> physiologicalAlleles,
+                 std::vector <RegulatoryAllele> positiveRegulatoryAlleles,
+                 std::vector <RegulatoryAllele> negativeRegulatoryAlleles
+                 );
+    
+            // #Constructor using a full pre-defined cell# //
+            Cell(const Cell &m_cell, bool cellSizerCycle,  gsl_rng *randomSimulation);
+            Cell(const Cell &m_cell);
+    
+            void operator=(const Cell &m_cell);
+    
+            // #Outside/pseudo constructor using some of the features of a pre-defined cell, i.e. those which are heritable by a daughter, and modifying those of the mother cell which concern products apportioned with respect to the post-mitosis volumes.# //
+            void BuildDaughterCell(Cell& m_cell);
+    
+        /* ##Destructor## */
+    
+        ~Cell();// At least needed to delete the pointer of random number.
+    
+    
+        /* ##Other methods## */
+    
+    
+            // #Printing the state of the cell# //
+            void PrintCell();
+    
+            // #Operations on the cell# //
+    
+            /* #0.Reevaluate connectivity vector# */
+            //i)Evaluate connectivity matrix
+            void EvaluateBSTFConnectivity();
+            void ReevaluateBSTFConnectivityAfterFactorSequenceMutation(int transcriptionFactorNumber);
+            void ReevaluateBSTFConnectivityAfterRegulatoryFactorSequenceMutation(int transcriptionFactorNumber);
+            void ReevaluateBSTFConnectivityAfterRegulatoryPhysiologicalSequenceMutation(std::string function);
+            void ReconstructBSTFConnectivityMatrixAfterEfficiencyPhysiologicalMutation(std::string function);
+    
+            //ii)Reevaluate connectivity after mutation on a specific gene
+            //void EvaluateGeneConnectivity();
+    
+            /* #1.Transcripts production# */
+            void TranscriptsDynamics(double delta_t);// In principle, need for a general function with balance of transcript
+            /* #2.Proteins production# */
+            void ProteinsDynamics(double delta_t);// In principle, need for a general function with balance of proteins
+            /* #3.Nutrient uptake# */
+            void SetNutrientsAfterNutrientDiffusion(double totalMembraneSurface, double totalStandardNutrientUptake,double totalRevealedNutrientUptake);
+            bool EnergyBudgetUsefulnessTest(double delta_t);
+            /* #4.Energy production# */
+            void EnergyProduction(bool energyWholeBudgetUsefulness,double delta_t);
+            /* #5.Energy use# */
+            void BasalMetabolismCalculus(double delta_t);
+                // #i.Withdrawal by the basal metabolism
+                void BasalMetabolismWithdrawal();
+                    // #ii.a)Cell growth
+                    void Growth(int totalNumberProteins,bool energyWholeBudgetUsefulness,double delta_t); //via phospholipids production
+                    // #ii.b)Cell maintenance molecule production
+                    void MaintenanceMetabolitesProduction(int totalNumberProteins,bool energyWholeBudgetUsefulness,double delta_t);
+                    // #ii.c)Cell Public Goods production
+                    void PublicGoodsMetabolitesProduction(int totalNumberProteins,bool energyWholeBudgetUsefulness,double delta_t);
+                // #ii. Whole energy allocation process
+                void EnergyBalance(bool energyWholeBudgetUsefulness,double delta_t);
+    
+            /* #6.Phenotype effects */
+                // #i.Maintenance metabolites effect# //
+                void GarbageNeutralization(double K_garbageNeutralization,double delta_t);
+                // #ii.Public goods release# //
+                double PublicgoodsRelease();
+                // #iii.Nutrient release if remainder# //
+                double StandardNutrientRelease();
+                double RevealedNutrientRelease();
+            /* #7.Mitosis checking */
+                // #i.Checking if replication checkpoint reached#
+                bool ReplicationCheckpoint();
+                // #ii.Processing of DNA synthesis#
+                void SynthesisProcessing(double delta_t);
+                // #iii.Checking if mitosis checkpoint reached#
+                bool MitosisCheckpoint();
+            /* #8.Death checking */
+                bool DeathTest(double delta_t);
+            /* #9.Mutation checking and outcome */
+                void MutationProcessing();
+            /* 10. Mitosis success checking: dividing size muste be superior to the minimal genome size */
+                bool MitosisFailure();
+    
+            // #Getting the settings# //
+    
+            double GetPermeabilityCell();
+            double GetAllometryProductionAlpha();
+            double GetAllometryBasalAlpha();
+            double GetEtaNutrientToGarbage();
+            double GetTauTranscriptionOncePolymeraseBound();
+            double GetBasalBindingProbabilityPolymerase();
+            double GetEnhancedBindingProbabilityPolymerase();
+            double GetTauDegradationTranscript();
+            double GetTauDegradationProtein();
+            int GetMetaboliteCost(std::string physiologicalFunction);
+            long int GetNumberGarbageUnits();
+            double GetVolumeCell();
+            double GetSACell();
+            int GetTranscripts(char t);
+            int GetTFTranscripts(int g);//t-ieth type of transcript
+            int GetProteins(char t);
+            int GetTranscriptionFactors(int g);//p-ieth type of protein
+            double GetMitosisSize(); //provisory size at mitosis as defined in the class
+    
+    
+            // #Setting the settings# //
+    
+            void SetGarbageUnits(double numberGarbageunits);
+    
+    
+private:
+    
+    /* ##Attributes## */
+    /* 0.Generaion number */
+        int m_generationNumber;
+    
+    /* 1.Chemico-physical properties of the cell */
+        //o. Afinities between Transcription factors and Binding-sites
+        double m_K__on;                       //binding reaction constant
+        double m_K__off;                      //dissociation reaction constant
+        //i.Membrane permeability
+        double m_permeabilityCell;            //Parameter: as such, it is not subject to evolution
+        //ii.Allometric coefficients for the efficiency of production (allometry production) and the greediness of basal needs
+        double m_allometryProductionAlpha;    //Parameter: as such, it is not subject to evolution
+        double m_allometryBasalAlpha;         //Parameter: as such, it is not subject to evolution
+        //iii.Conversion rate between Nutrient and Product or By-product
+        double m_etaNutrientToEnergy;
+        double m_etaNutrientToGarbage;
+        //iv.Cost of protein production
+        std::map <std::string,double> m_metaboliteCost;
+        //v.Duration of DNA replication
+        double m_synthesisDuration;
+    
+    /* 2.Transcripts dynamics */
+        /*int m_connectivityMatrix[14][10];*/
+        int **m_connectivityMatrix;                     //Connectivity between TF and BS
+        int *m_totalBindingSites;                       //Number of each type binding-sites in the whole genome
+        //i.Transcription rates
+        double m_tauTranscriptionOncePolymeraseBound;   //Need to be defined specifically by the intertwining between TF and BS
+        double m_basalBindingProbabilityPolymerase;
+        double m_enhancedBindingProbabilityPolymerase;  //+ function to pick randomly degradation
+        //ii.Degradation rate
+        double m_tauDegradationTranscript;
+    
+    /* 3.Proteins and metabolites dynamics */
+        //i.Traduction rate
+        double m_tauTraduction;
+        double m_etaTranslationActivityPostCheckpoint;
+        //ii.Degradation rate
+        double m_tauDegradationProtein;
+        //iii.Metabolite
+        double m_metaboliteGrowthProductionRate;
+        double m_metaboliteMaintenanceProductionRate;
+        double m_metaboliteCommonGoodsProductionRate;
+        double m_metaboliteDegradationRate;
+
+    /* 4.Dynamical physical features */
+        //i.Size of the cell
+        double m_volumeCell;
+        //ii.Current time since DNA synthesis beginning
+        double m_timeSinceSynthesisBeginning;
+    
+    /* 5.Content of the cell */
+        //o. Calibration of basal metabolism constraints
+        double m_SA_calibration;
+        double m_basalMetabolismSAcalibration;
+        double m_currentBasalMetabolism;
+        //i.Energetic content
+        double m_numberStandardNutrientUnits;
+        double m_numberRevealedNutrientUnits;
+        //int m_basalEnergyUnits;
+        double m_numberEnergyUnits;
+        //ii.By-product content: garbage
+        double m_numberGarbageUnits;
+        //iii.Transcripts content
+        int m_numberGrowthTranscripts;
+        int m_numberMaintenanceTranscripts;
+        int m_numberPublicGoodsTranscripts;
+        int m_numberSizerTranscripts;
+        int *m_numberTFTranscripts; //Transcripts of transcription factors coding genes
+        //iv.Proteins content
+        int m_numberGrowthProteins;
+        int m_numberMaintenanceProteins;
+        int m_numberPublicGoodsProteins;
+        int m_numberSizerProteins;
+        int *m_numberTranscriptionFactors;
+        //iv.Maintenance metabolite content
+        double m_numberMaintenanceMetabolites;
+        double m_numberPublicGoodsMetabolites;
+    
+    /* 6.Genetics */
+        double m_volumeProportionDescendant;
+        double m_garbageProportionDescendant;
+        bool m_cellCycleSizer;
+        double m_volumeCellMitosis; //Provisory: need to be defined by genes
+        double m_volumeMutationRate;
+        double m_sizerThresholdMitosis; //Featuring the concentration threshold of sizer at which DNA synthesis starts in order to reproduce.
+        std::string m_cellCycle; //type of cell cycle, including G2 or not, with simplification made: the cell is either in G1 either in S/G2/M
+    
+        /*Genes*/
+    
+        //Physiological genes//
+        std::vector <std::string> m_physiologicalFunctions;
+        std::map <std::string,PhysiologicalAllele> m_physiologicalAlleles;
+    
+        //Regulatory genes//
+        std::vector <RegulatoryAllele> m_regulatoryAlleles;
+    
+    /* 7.Genomics */
+    
+        double m_sizeMinimalGenome; //A cell cannot be smaller than the size of the minimal genome allowing life; coherent with the use of a sizer because if mitosis is determined by a threshold, cells having no sizer will divide continously and reach a size of zero which means nothing at al inside the cell.
+    
+    /* 8.Random generator */
+        gsl_rng * Random;//(pseudo) random number used in the processing for the diferent draws.
+    
+};
+
+    /* ###Generic functions### */
+
+        /* #Conversion of a volume into a surface area# */
+        double VtoSAconversion(double V_cell);
+
+        /* #Conversion of a surface area into a volume# */
+        double SAtoVconversion(double SA_cell);
+
+        /* #Calculus of a concentration for a molecule in a given cell# */
+        long double ConcentrationCalculus(double MoleculeNumber, double CellVolume);
+
+        /* #Proportion calculus of a given type entity among all the similar entities regardless of their type# */
+        double Proportion(double sub, double total);
+
+        /* Product of elements contained in a vector, raised to the power contained in another vector */
+        double WeightProduct(const int nb_elements, double* elements,int* repeat_numbers);
+
+        void GetKey_valuesMapofPhysiologicalAllele(std::vector<std::string> &keys, std::map<std::string,PhysiologicalAllele> Map);
+
+#endif /* Cell_hpp */

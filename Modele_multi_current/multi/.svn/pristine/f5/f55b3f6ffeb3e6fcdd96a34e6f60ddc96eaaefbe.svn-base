@@ -1,0 +1,52 @@
+//
+//  main.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 16/02/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+
+#include "Ecosystem.hpp"
+
+using namespace std;
+
+int main() {
+    Medium medium1(600,pow(10,1),0);
+    Compartiment compa1(pow(10,9), 100, pow(10,6), 5);
+    Compartiment compa2(pow(10,9), 100, 10, 5);//Concentrations in
+    Compartiment compa3(0,0,1000,0);
+    Cell cell1;
+    int simulationNumber(10);
+    
+    //cell1.PrintCell();
+    
+    DonutPuddle donutpuddle1(simulationNumber,1000,1,pow(10,4),3,3,compa1,compa2,3,cell1);
+    
+    //FinitePuddle finitepuddle1(1000,1,pow(10,4),2,2,compa1,compa2,3,cell1);
+    //SeabedPuddle seabedpuddle1(1000,1,pow(10,4),10,10,compa1,compa2,compa3);
+    
+    donutpuddle1.PrintPuddle(false);
+    //finitepuddle1.PrintPuddle(false);
+    //seabedpuddle1.PrintPuddle(true);
+    
+    for (int t=1;t<3600;t++)
+    {
+        donutpuddle1.TimeStepInsidePuddle();
+        donutpuddle1.DiffusionBetweenCompartments();
+    }
+    
+    donutpuddle1.PrintPuddle(false);
+     
+    /*
+    for (int t=1;t<=3600*10;t++)
+    {
+    donutpuddle1.DiffusionBetweenCompartments();
+    
+    //seabedpuddle1.DiffusionBetweenCompartments();
+    }
+    donutpuddle1.PrintPuddle(false);
+    //finitepuddle1.PrintPuddle(false);
+    //seabedpuddle1.PrintPuddle(true);
+     */
+}

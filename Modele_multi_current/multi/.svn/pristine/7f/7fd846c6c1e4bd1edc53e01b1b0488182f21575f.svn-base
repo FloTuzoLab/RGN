@@ -1,0 +1,213 @@
+//
+//  main.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 16/02/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+
+#include "Ecosystem.hpp"
+
+using namespace std;
+
+int main() {
+    
+    // Generation of 14 regulatory sequences //
+    int lengthRegulatorySequences(1000);
+    int lengthBindingSites(8);
+    const int numberTF=16;
+    const int numberSequence=20;
+    string sequence1[numberSequence];
+    string bindingsite1[numberTF];
+    int simulationNumber(2);
+    gsl_rng *Random=gsl_rng_alloc(gsl_rng_default);
+    gsl_rng_set(Random, simulationNumber);
+    for (int seq=0;seq<numberSequence;seq++){ //ETIENNE: OK; pourrait étre simplifié avec un char[4]={'A', 'T', ...} et gsl_ran_choose; drawResult pourrait être défini en dehors de la boucle
+        for(int pos=0;pos<lengthRegulatorySequences;pos++){
+            int drawResult=gsl_ran_flat(Random, 0, 4);
+            if (drawResult<1){
+                sequence1[seq].push_back('A');
+            }
+            else if (drawResult<2){
+                sequence1[seq].push_back('C');
+            }
+            else if (drawResult<3){
+                sequence1[seq].push_back('G');
+            }
+            else{
+                sequence1[seq].push_back('T');
+            }
+        }
+    }
+    for (int TFnumber=0;TFnumber<numberTF;TFnumber++){
+        for(int pos=0;pos<lengthBindingSites;pos++){
+            int drawResult=gsl_ran_flat(Random, 0, 4);
+            if (drawResult<1){
+                bindingsite1[TFnumber].push_back('A');
+            }
+            else if (drawResult<2){
+                bindingsite1[TFnumber].push_back('C');
+            }
+            else if (drawResult<3){
+                bindingsite1[TFnumber].push_back('G');
+            }
+            else{
+                bindingsite1[TFnumber].push_back('T');
+            }
+        }
+    }
+    
+    double lengthCompartment(pow(10,-2));
+    int timeStepRatio(5);
+    //Redefinition of the first gene(Growth) in order to test and to be sure that it has binding sites for transcription factors.
+    
+    //sequence1[0].replace(500,bindingsite1[2].length(),bindingsite1[2]);
+    sequence1[0].replace(0,bindingsite1[4].length(),bindingsite1[4]);
+    //sequence1[3].replace(125,bindingsite1[4].length(),bindingsite1[4]);
+    //sequence1[3].replace(725,bindingsite1[9].length(),bindingsite1[9]);
+    //sequence1[5].replace(725,bindingsite1[1].length(),bindingsite1[1]);
+    //sequence1[2].replace(125,bindingsite1[1].length(),bindingsite1[1]);
+    sequence1[1].replace(150,bindingsite1[2].length(),bindingsite1[2]);
+    sequence1[1].replace(250,bindingsite1[2].length(),bindingsite1[2]);
+    sequence1[5].replace(250,bindingsite1[2].length(),bindingsite1[2]);
+    sequence1[7].replace(150,bindingsite1[2].length(),bindingsite1[2]);
+    sequence1[9].replace(250,bindingsite1[2].length(),bindingsite1[2]);
+    sequence1[10].replace(250,bindingsite1[2].length(),bindingsite1[2]);
+    sequence1[6].replace(250,bindingsite1[2].length(),bindingsite1[2]);
+    //sequence1[8].replace(300,bindingsite1[8].length(),bindingsite1[8]);
+    
+        
+    // Initialization of the objects //
+        
+    Medium medium1(600,100,1); //Diffusion coefficients of the medium; order: Nutrients, Public Goods, Cells
+    Compartiment compa1_1(lengthCompartment,pow(10,-6), pow(10,-6), 0, 0);//Concentrations in mol.L^(-1); order: Standard Nutrient, Hidden Nutrient, Revealed Nutrient, Common Goods
+    Compartiment compa1_2(lengthCompartment,pow(10,-6),pow(10,-6), 0, 0);//Concentrations in mol.L^(-1) ; order: same as above
+    Compartiment compa1_3(lengthCompartment,pow(10,-6),pow(10,-6),0,0);//Concentrations in mol.L^(-1); order: same as above
+
+    
+    PhysiologicalAllele growthallele1(sequence1[0],0.0001,true,Random);          //sequence should result from pre-simulation, mutation rate as a variable parameter.
+    PhysiologicalAllele maintenanceallele1(sequence1[1],0.0001,true,Random);     //sequence should result from pre-simulation, mutation rate as a variable parameter.
+    PhysiologicalAllele publicgoodsallele1(sequence1[2],0.0001,true,Random);     //sequence should result from pre-simulation, mutation rate as a variable parameter.
+    PhysiologicalAllele cellsizer1(sequence1[3],0.0001,true,Random);             //sequence should result from pre-simulation, mutation rate as a variable parameter.
+    std::vector <RegulatoryAllele> positivetranscriptionfactors1;               //vector of positive regulatory alleles
+    std::vector <RegulatoryAllele> negativetranscriptionfactors1;               //vector of negative regulatory alleles
+    
+    for (int TFnumber=0;TFnumber<8;TFnumber++){
+        RegulatoryAllele randompositiveTranscriptionFactor(sequence1[TFnumber+4],0.0001,Random,bindingsite1[TFnumber],'A');
+        RegulatoryAllele randomnegativeTranscriptionFactor(sequence1[TFnumber+12],0.0001,Random,bindingsite1[TFnumber+8],'R');
+        positivetranscriptionfactors1.push_back(randompositiveTranscriptionFactor);
+        negativetranscriptionfactors1.push_back(randomnegativeTranscriptionFactor);
+    }
+    
+    positivetranscriptionfactors1[7].PrintRegulatoryAllele();
+        //
+    //cellsizer1.BSTFMatchCount(transcriptionfactors1[8]);
+    
+    //positivetranscriptionfactors1[2].PrintRegulatoryAllele();
+    //cout << sequence1 << endl;
+    map <string,int> metabolitesCost;
+    metabolitesCost.insert(pair<string,int>("Growth",1000));
+    metabolitesCost.insert(pair<string,int>("Maintenance",1000));
+    metabolitesCost.insert(pair<string,int>("Public Goods",100));
+    
+    map <string,PhysiologicalAllele> physiologicalInitialAlleles;
+    physiologicalInitialAlleles.insert(pair<string,PhysiologicalAllele>("Growth",growthallele1));               //allele encoding growth protein
+    physiologicalInitialAlleles.insert(pair<string,PhysiologicalAllele>("Maintenance",maintenanceallele1));     //allele encoding maintenance protein
+    physiologicalInitialAlleles.insert(pair<string,PhysiologicalAllele>("Public Goods",publicgoodsallele1));    //allele encoding public goods protein
+    physiologicalInitialAlleles.insert(pair<string,PhysiologicalAllele>("Cell sizer",cellsizer1));              //allele encoding sizer protein
+    
+    Cell cell1(pow(10,2),                     //K_on BSTF
+               pow(10,3),                     //K_off BSTF
+               5*pow(10,4),                    //permeabilityCell (unit: micrometer.s^-1, corresponds to estimated oxygen permeability)
+               1,                              //allometryProductionAlpha (not subject to sensitivity study: means that energy production is strictly proportional to nutrient uptake
+               1.25,                           //allometryBasalAlpha (subject to sensitivity study, from 1 to 1.5)
+               1,                              //etaNutrientToGarbage  (number of garbage produced by the conversion of one nutrient)
+               1500,                           //synthesisDuration    (duration of DNA synthesis) useless now
+               0.1,                            //tauTranscriptionOncePolymeraseBound  (transcription rate once polymerase is bound: acknowledged as a constant, cf. Bio by the number)
+               0.01,                           //basalBindingProbabilityPolymerase   (polymerase binding probability without the help of an enhancer: chosen such that the complete range of values from 0 to maximum transcription rate can occur)
+               0.5,                            //enhancedBindingProbabilityPolymerase (polymerase binding probability wuth the help of an enhancer: chosen such that the maximum transcription rate described in litterature can occur)
+               0.1,                            //tauTraduction (translation rate according to scientific litterature, cf. Bio. by the numbers, for one ribosome: generally more than one can be actively translating a single mRNA, function of the energy as a result of the basal metabolism investment (which is only depending on the volume here, not subject to any evolutionary process))
+               0.001,                          //tauDegradationTranscript (mRNA degradation rate according to scientific litterature, cf. Bio. by the numbers)
+               0.0005,                         //tauDegradationProtein  (protein degradation rate according to scientific litterature, cf. Bio. by the numbers)
+               metabolitesCost,                //metabolites cost  (cost of producing each metabolite in terms of energy units: subject to wide sensitivity study because few knowledge in the litterature)
+               1,                              //Surface Area used for basal metabolism calibration
+               pow(10,5),                      //ATP expenses for the Surface Area used in calibration
+               30,                             //cellVolume  (square micrometers)
+               0.5,                            //volumeProportionDescendant (percentage: subject to sensitivity study because we intuit that it could influence differentiation by increasing noise
+               0.5,                            //garbageProportionDescendant (percentage: not used in the first models)
+               1000,                            //volumeCellMitosis  (unused parameter: served at the beginning to parameterize the models)
+               0.1,                              //sizerThreshold   (concentration threshold allowing to progress in the cycle cycle towards DNA replication)
+               "GSM",                          //type of cell cycle
+               physiologicalInitialAlleles,
+               positivetranscriptionfactors1,
+               negativetranscriptionfactors1
+               );
+    
+    cell1.PrintCell();
+    
+    double delta_t(1);
+    
+    //ETIENNE: Je ne trouve pas DonutPuddle(args)
+    DonutPuddle donutpuddle1(simulationNumber,     //seed initialization
+                             delta_t,              //timestep used in the simulation
+                             lengthCompartment,            //length of the compartment (unit decimeters, cubic shape)
+                             timeStepRatio,
+                             1,                   //length of the ecosystem (unit: number of compartment)
+                             1,                   //width of the ecosystem (unit: number of compartment)
+                             compa1_1,             //puddle inside compartment
+                             compa1_2,             //puddle outside compartment
+                             1000,                    //initial number of cells
+                             cell1);               //initial cells in the simulation
+    
+    //FinitePuddle finitepuddle1(simulationNumber,1,pow(10,4),3,3,compa1,compa2,3,cell1);
+    //SeabedPuddle seabedpuddle1(1,1,pow(10,4),10,10,compa1,compa2,compa3);
+    
+    //donutpuddle1.PrintPuddle();
+    //finitepuddle1.PrintPuddle();
+    //seabedpuddle1.PrintPuddle(true);
+    
+    
+    double T_simu=2000000;
+    int simu_stepNumber=T_simu/delta_t;
+    int t_int=1;
+    int t_int_print=1;
+    for (int t=1;t<=simu_stepNumber;t++)
+    {
+        donutpuddle1.TimeStepInsidePuddle(t,delta_t);
+        donutpuddle1.DiffusionBetweenCompartments();
+        if (t==t_int){
+            cout << "Pas de temps n°: " << t << endl;
+            /*
+            cout << endl;*/
+            t_int+=T_simu/(1000*delta_t);
+            if (t==t_int_print){
+            donutpuddle1.PrintPuddle();
+                t_int_print+=T_simu/(100*delta_t);
+            }
+            cout << endl << endl;
+            cout << "Pas de temps n°: " << t << endl;
+            
+        }
+    }
+    
+    donutpuddle1.PrintPuddle();
+ 
+    /*
+    for (int t=1;t<=3600*10;t++)
+    {
+    donutpuddle1.DiffusionBetweenCompartments();
+    
+    //seabedpuddle1.DiffusionBetweenCompartments();
+    }
+    donutpuddle1.PrintPuddle(false);
+    //finitepuddle1.PrintPuddle(false);
+    //seabedpuddle1.PrintPuddle(true);
+     */
+    gsl_rng_free(Random);
+}
+
+
+    
+
+

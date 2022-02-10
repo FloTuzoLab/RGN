@@ -1,0 +1,339 @@
+//
+//  Allele.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 19/03/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#include "Allele.hpp"
+
+using namespace std;
+
+/* ##Generic features of an allele object## */
+
+// #Default constructor not implemented with the random simulation number# //
+Allele::Allele():
+    m_mutationRate(pow(10,-6))
+{
+    gsl_rng *rnd=gsl_rng_alloc(gsl_rng_default);
+    gsl_rng_set(rnd, 1);
+    _random_Simulation=rnd;
+    for (int position=0;position<=999;position++){
+        m_regulatorySequence.push_back('A');
+    }
+    gsl_rng_free(rnd);
+}
+
+Allele::Allele(std::string regulatorySequence,double mutationRate,gsl_rng *random_Simulation):
+    m_mutationRate(mutationRate)
+{
+    _random_Simulation=random_Simulation;
+    for (int position=0;position<=999;position++){
+        m_regulatorySequence.push_back(regulatorySequence[position]);
+    }
+}
+
+Allele::Allele(const Allele& m_allele):
+m_mutationRate(m_allele.m_mutationRate),
+_random_Simulation(m_allele._random_Simulation)
+{
+    for (int position=0;position<=999;position++){
+        m_regulatorySequence[position]=m_allele.m_regulatorySequence[position];
+    }
+}
+
+// #Destructor# //
+Allele::~Allele()
+{
+    //Useless here
+}
+
+
+// #Operators# //
+
+// Operator = //
+void Allele::operator=(const Allele& m_allele)
+{
+    m_mutationRate=m_allele.m_mutationRate;
+    _random_Simulation=m_allele._random_Simulation;
+    for (int position=0;position<=999;position++){
+        m_regulatorySequence[position]=m_allele.m_regulatorySequence[position];
+    }
+}
+
+// #Other methods# //
+
+// Printing function //
+void Allele::PrintAllele()
+{
+    cout << "Mutation rate:" << m_mutationRate << endl;
+    cout << "Regulatory sequence:" << endl << m_regulatorySequence << endl;
+}
+
+bool Allele::RegulatorySequenceMutation()
+{
+    vector <int> _mutationPosition;
+    int mutation=0;
+    for (int sitePosition=0;sitePosition<m_regulatorySequence.length();sitePosition++){
+        mutation=gsl_ran_binomial(_random_Simulation, m_mutationRate, 1);
+        if (mutation==1){
+            _mutationPosition.push_back(sitePosition);
+        }
+    }
+    for (int mutationPosition=0;mutationPosition<_mutationPosition.size();mutationPosition++){
+        int nucleotideChoice=0;//gsl_ran_flat(_random_Simulation,0,3);
+        switch(m_regulatorySequence[_mutationPosition[mutationPosition]]){
+            case 'A':
+                if (nucleotideChoice<1){
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='C';
+                    break;
+                }
+                else if (nucleotideChoice<2){
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='G';
+                    break;
+                }
+                else{
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='T';
+                    break;
+                }
+            case 'C':
+                if (nucleotideChoice<1){
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='A';
+                    break;
+                }
+                else if (nucleotideChoice<2){
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='G';
+                    break;
+                }
+                else{
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='T';
+                    break;
+                }
+            case 'G':
+                if (nucleotideChoice<1){
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='A';
+                    break;
+                }
+                else if (nucleotideChoice<2){
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='C';
+                    break;
+                }
+                else{
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='T';
+                    break;
+                }
+            case 'T':
+                if (nucleotideChoice<1){
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='A';
+                    break;
+                }
+                else if (nucleotideChoice<2){
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='C';
+                    break;
+                }
+                else{
+                    m_regulatorySequence[_mutationPosition[mutationPosition]]='G';
+                    break;
+                }
+        }
+        
+    }
+    return (_mutationPosition.size()>0);
+}
+
+/* ##Specific features of a physiological allele object## */
+
+/* Constructor */
+
+PhysiologicalAllele::PhysiologicalAllele()
+{
+}
+
+PhysiologicalAllele::PhysiologicalAllele(std::string regulatorySequence,
+                                         double mutationRate,
+                                         bool efficiencyGene,
+                                         gsl_rng *random_Simulation):
+Allele(regulatorySequence,mutationRate,random_Simulation)
+{
+    m_efficiencyGene=efficiencyGene;
+}
+
+PhysiologicalAllele::PhysiologicalAllele(const PhysiologicalAllele& m_physiologicalAllele)
+{
+    _random_Simulation=m_physiologicalAllele._random_Simulation;
+    m_mutationRate=m_physiologicalAllele.m_mutationRate;
+    m_regulatorySequence=m_physiologicalAllele.m_regulatorySequence;
+    m_efficiencyGene=m_physiologicalAllele.m_efficiencyGene;
+}
+
+void PhysiologicalAllele::operator=(const PhysiologicalAllele& m_physiologicalAllele)
+{
+    _random_Simulation=m_physiologicalAllele._random_Simulation;
+    m_mutationRate=m_physiologicalAllele.m_mutationRate;
+    m_regulatorySequence=m_physiologicalAllele.m_regulatorySequence;
+    m_efficiencyGene=m_physiologicalAllele.m_efficiencyGene;
+}
+
+
+bool PhysiologicalAllele::EfficiencyMutation()
+{
+    int efficiency_Loss=gsl_ran_binomial(_random_Simulation,m_mutationRate,1);
+    if (efficiency_Loss==1){
+        m_efficiencyGene=false;
+        return (true);
+    }
+    else{
+        return (false);
+    }
+    
+}
+
+/* ##Specific features of a regulatory allele object## */
+
+/* Constructor */
+
+RegulatoryAllele::RegulatoryAllele()
+{
+}
+
+RegulatoryAllele::RegulatoryAllele(std::string regulatorySequence,
+                                   double mutationRate,
+                                   gsl_rng *random_Simulation,
+                                   std::string bindingSequence,
+                                   char regulationEffect):
+Allele(regulatorySequence,mutationRate,random_Simulation),
+m_regulationEffect(regulationEffect)
+{
+    m_bindingSequence=bindingSequence;
+}
+
+RegulatoryAllele::RegulatoryAllele(const RegulatoryAllele& m_regulatoryAllele)
+{
+    _random_Simulation=m_regulatoryAllele._random_Simulation;
+    m_regulationEffect=m_regulatoryAllele.m_regulationEffect;
+    m_mutationRate=m_regulatoryAllele.m_mutationRate;
+    m_regulatorySequence=m_regulatoryAllele.m_regulatorySequence;
+    m_bindingSequence=m_regulatoryAllele.m_bindingSequence;
+}
+
+void RegulatoryAllele::operator=(const RegulatoryAllele& m_regulatoryAllele)
+{
+    _random_Simulation=m_regulatoryAllele._random_Simulation;
+    m_regulationEffect=m_regulatoryAllele.m_regulationEffect;
+    m_mutationRate=m_regulatoryAllele.m_mutationRate;
+    m_regulatorySequence=m_regulatoryAllele.m_regulatorySequence;
+    for (int position=0;position<8;position++){
+        m_bindingSequence[position]=m_regulatoryAllele.m_bindingSequence[position];
+    }
+}
+
+// Testing the match between a portion of sequence and the binding-site of a transcription factor //
+
+int RegulatoryAllele::BSTFMatchCount(const RegulatoryAllele& m_regulatoryAllele)
+{
+    int count = 0;
+    size_t positionNumber = m_regulatorySequence.find(m_regulatoryAllele.m_bindingSequence, 0); // first occurrence
+    while(positionNumber != string::npos)
+    {
+        count++;
+        positionNumber = m_regulatorySequence.find(m_regulatoryAllele.m_bindingSequence, positionNumber + 1);
+    }
+    //cout << "count: " << count << endl;
+    return (count);
+}
+
+int PhysiologicalAllele::BSTFMatchCount(const RegulatoryAllele& m_regulatoryAllele){
+    int count = 0;
+    size_t positionNumber = m_regulatorySequence.find(m_regulatoryAllele.m_bindingSequence, 0); // first occurrence
+    while(positionNumber != string::npos)
+    {
+        count++;
+        positionNumber = m_regulatorySequence.find(m_regulatoryAllele.m_bindingSequence, positionNumber + 1);
+    }
+    //cout << "count: " << count << endl;
+    return (count);
+}
+
+bool RegulatoryAllele::BindingSiteRecognitionMutation()
+{
+    vector <int> _mutationPosition;
+    for (int sitePosition=0;sitePosition<m_bindingSequence.length();sitePosition++){
+        if (gsl_ran_binomial(_random_Simulation,m_mutationRate,1)==1){
+            _mutationPosition.push_back(sitePosition);
+        }
+    }
+    for (int mutationPosition=0;mutationPosition<_mutationPosition.size();mutationPosition++){
+        int nucleotideChoice=gsl_ran_flat(_random_Simulation,0,3);
+        switch(m_bindingSequence[_mutationPosition[mutationPosition]]){
+            case 'A':
+                if (nucleotideChoice<1){
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='C';
+                    break;
+                }
+                else if (nucleotideChoice<2){
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='G';
+                    break;
+                }
+                else{
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='T';
+                    break;
+                }
+            case 'C':
+                if (nucleotideChoice<1){
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='A';
+                    break;
+                }
+                else if (nucleotideChoice<2){
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='G';
+                    break;
+                }
+                else{
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='T';
+                    break;
+                }
+            case 'G':
+                if (nucleotideChoice<1){
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='A';
+                    break;
+                }
+                else if (nucleotideChoice<2){
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='C';
+                    break;
+                }
+                else{
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='T';
+                    break;
+                }
+            case 'T':
+                if (nucleotideChoice<1){
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='A';
+                    break;
+                }
+                else if (nucleotideChoice<2){
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='C';
+                    break;
+                }
+                else{
+                    m_bindingSequence[_mutationPosition[mutationPosition]]='G';
+                    break;
+                }
+        }
+        
+    }
+    return (_mutationPosition.size()>0);
+}
+
+
+char RegulatoryAllele::NatureOfEffect()
+{
+    return (m_regulationEffect);
+}
+
+void RegulatoryAllele::PrintRegulatoryAllele()
+{
+    PrintAllele();
+    cout << "Binding-sequence recognised:" << endl << m_bindingSequence << endl;
+    cout << "Nature de l'effet: " << m_regulationEffect << endl;
+}
+

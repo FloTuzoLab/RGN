@@ -1,0 +1,86 @@
+//
+//  Allele.hpp
+//  Cell_Evolution
+//
+//  Created by Florian on 19/03/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#ifndef Allele_hpp
+#define Allele_hpp
+
+#include <iostream>
+#include <cstdlib>
+#include <string>
+
+#include <math.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+#include <random>
+
+/*## 1.Generic allele definition ##*/
+class Allele
+{
+    
+public:
+/* ###Methods### */
+    
+    
+    /* ##Constructors## */
+    
+    
+        // #Default constructor# //  //Need to see if not counterproductive by introducing a risk of non-working situations
+        Allele();
+    
+        // #Total free constructor# //
+        Allele(std::string regulatorySequence,double mutationRate);
+    
+        // #Constructor using a full pre-defined cell#
+        Allele(const Allele& m_allele);
+    
+    /* ##Destructor## */
+    
+        ~Allele();
+    
+        // #Operator = # //
+        void operator=(const Allele& m_allele);
+    
+    /* ##Other methods## */
+    
+        // #Printing the state of the allele# //
+        void PrintAllele();
+    
+        void TFBSMatchTesting();
+        void RegulatorySequenceMutation();
+    
+protected:
+    std::string m_regulatorySequence;
+    double m_mutationRate;
+    
+    
+    gsl_rng * rnd;//(pseudo) random number used in the processing for the diferent draws.
+};
+
+
+/*## 2.Specification of regulatory allele definition ##*/
+class RegulatoryAllele : public Allele
+{
+public:
+    RegulatoryAllele(std::string regulatorySequence,double mutationRate,std::string bindingSequence);
+    void BindingSiteRecognitionMutation();
+    
+private:
+    std::string m_bindingSequence;
+};
+
+/*## 3.Specification of physiological allele definition ##*/
+class PhysiologicalAllele : public Allele
+{
+public:
+    PhysiologicalAllele(std::string regulatorySequence,double mutationRate,bool efficiencyGene);
+    void EfficiencyMutation();
+private:
+    bool m_efficiencyGene;
+};
+
+#endif /* Allele_hpp */

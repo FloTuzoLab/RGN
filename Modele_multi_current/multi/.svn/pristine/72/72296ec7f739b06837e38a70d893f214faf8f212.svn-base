@@ -1,0 +1,807 @@
+//
+//  Cell.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 02/03/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#include "Cell.hpp"
+
+using namespace std;
+
+/*  ##Constructors##    */
+
+
+    /*  #Default Constructor: only some basic physical properties defined#  */
+
+Cell::Cell() /*These two features are not subject to evolution and make no sense when fixed to 0; hence, it is better to define them even in the default construtor.*/ :
+/*1.Properties of the cell*/
+
+//Fixed:
+//i.Chemico-physical properties
+m_permeabilityCell(pow(10,-1)),                                   //Permeability of the cell membrane
+m_allometryProductionAlpha(1),         //Allometry of energy production: how scale the production of energy per nutrient unit with cell volume
+m_allometryBasalAlpha(1),                   //Allometry of basal metabolism: how scale the cost of basal metabolism with cell volume
+m_etaNutrientToEnergy(30),                                          //Conversion rate between a nutrient and energy
+m_etaNutrientToGarbage(1),                       //Conversion rate between a nutrient and a garbage
+m_metaboliteCost{1,100,1},        //Cost for :{"Growth","Maintenance","Public goods"}
+m_synthesisDuration(100),
+
+//Variable:
+//ii.Transcription rate of genes                                    //Further, these rates will rely on BSTF dynamics
+m_tauGrowthGeneTranscription(0.1),
+m_tauMaintenanceGeneTranscription(0.1),
+m_tauPublicGoodsGeneTranscription(0.1),
+//iii.Traduction rate of transcripts
+m_tauTraduction(5),
+//iv.Degradation rate of gene products
+m_tauDegradationTranscript(0.01),               //Same degradation rate for each transcript
+m_tauDegradationProtein(0.01),                     //Same degradation rate for each protein
+//v.Size of the cell
+m_volumeCell(100),
+//vi.Current time since DNA synthesis beginning
+m_timeSinceSynthesisBeginning(0),
+
+/*2.Content of the cell*/
+
+//i.Energetic content
+m_numberNutrientUnits(0),                                           //In a first time, nutrient units are immediately consumed
+m_numberEnergyUnits(0),                                             //In a first time, energy units are immediately consumed
+//ii.By-product content: garbage
+m_numberGarbageUnits(0),
+//iii.Transcripts content
+m_numberGrowthTranscripts(0),
+m_numberMaintenanceTranscripts(0),
+m_numberPublicGoodsTranscripts(0),
+//iv.Proteins content
+m_numberGrowthProteins(0),
+m_numberMaintenanceProteins(0),
+m_numberPublicGoodsProteins(0),
+//v.Metabolites content
+m_numberMaintenanceMetabolites(0),
+m_numberPublicGoodsMetabolites(0),
+
+/*3.Genetics*/
+
+//i.Cell volume at mitosis
+m_volumeProportionDescendant(0.5),
+m_garbageProportionDescendant(0.5),
+m_volumeCellMitosis(500)                         //In principle, should disappear when genes are defined.
+//2.Genes definition
+
+{
+    //rnd=randomSimulation;
+    for (int g=0;g<10;g++){
+        m_numberTFTranscripts[g]=0;
+        m_numberTranscriptionFactors[g]=0;
+    }
+    for (int typeOfTFNumber=0;typeOfTFNumber<10;typeOfTFNumber++){
+        for (int physiologicalGene=0;physiologicalGene<14;physiologicalGene++){
+            m_connectivityMatrix[typeOfTFNumber][physiologicalGene]=0;
+        }
+        m_totalBindingSites[typeOfTFNumber]=0;
+    }
+    //m_positiveRegulatoryAlleles[0]("TATA",pow(10,-6),"TATATATA",1);
+    int lengthRegulatorySequences(1000);
+    int lengthBindingSites(8);
+    string genericSequence;
+    string genericBindingSite;
+    int simulationNumber(1);
+    gsl_rng *Random=gsl_rng_alloc(gsl_rng_default);
+    gsl_rng_set(Random, simulationNumber);
+    
+    for(int pos=0;pos<lengthRegulatorySequences;pos++){
+        int drawResult=gsl_ran_flat(Random, 0, 4);
+        if (drawResult<1){
+            genericSequence.push_back('A');
+        }
+        else if (drawResult<2){
+            genericSequence.push_back('C');
+        }
+        else if (drawResult<3){
+            genericSequence.push_back('G');
+        }
+        else{
+            genericSequence.push_back('T');
+        }
+    }
+    
+    for(int pos=0;pos<lengthBindingSites;pos++){
+        int drawResult=gsl_ran_flat(Random, 0, 4);
+        if (drawResult<1){
+            genericBindingSite.push_back('A');
+        }
+        else if (drawResult<2){
+            genericBindingSite.push_back('C');
+        }
+        else if (drawResult<3){
+            genericBindingSite.push_back('G');
+        }
+        else{
+            genericBindingSite.push_back('T');
+        }
+    }
+    
+    PhysiologicalAllele genericPhysiologicalAllele(genericSequence,pow(10,-6),true);
+    
+    m_growthAllele=(genericPhysiologicalAllele);
+    m_maintenanceAllele=genericPhysiologicalAllele;
+    m_publicGoodsAllele=genericPhysiologicalAllele;
+    m_cellSizerAllele=genericPhysiologicalAllele;
+    
+    RegulatoryAllele posreg(genericSequence,pow(10,-6),genericBindingSite,1);
+    RegulatoryAllele negreg(genericSequence,pow(10,-6),genericBindingSite,-1);
+    for (int typeTFnumber=0;typeTFnumber<5;typeTFnumber++){
+        m_positiveRegulatoryAlleles.push_back(posreg);
+        m_negativeRegulatoryAlleles.push_back(negreg);
+    }
+    
+}
+
+
+
+    /* #Total free Constructor# */
+
+Cell::Cell(gsl_rng *randomSimulation,
+           double permeability,
+           double allometryProductionCoefficient,
+           double allometryBasalCoefficient,
+           double etaNutrientToGarbage,
+           int synthesisDuration,
+           double tauGrowthGeneTranscription,
+           double tauMaintenanceGeneTranscription,
+           double tauPublicGoodsGeneTranscription,
+           double tauTraduction,
+           double tauDegradationTranscript,
+           double tauDegradationProtein,
+           int metaboliteCost[3],
+           int numberGarbageUnits,
+           double cellVolume,
+           int timeSinceSynthesisBeginning,
+           int numberGrowthTranscripts,
+           int numberMaintenanceTranscripts,
+           int numberPublicGoodsTranscripts,
+           int numberOtherTranscripts [10],
+           int numberGrowthProteins,
+           int numberMaintenanceProteins,
+           int numberPublicGoodsProteins,
+           int numberMaintenanceMetabolites,
+           int numberPublicGoodsMetabolites,
+           int numberOtherProteins [10],
+           double volumeProportionDescendant,
+           double garbageProportionDescendant,
+           double volumeCellMitosis,
+           PhysiologicalAllele growthAllele,
+           PhysiologicalAllele maintenanceAllele,
+           PhysiologicalAllele publicGoodsAllele,
+           PhysiologicalAllele cellSizerAllele,
+           vector <RegulatoryAllele> positiveRegulatoryAlleles,
+           vector <RegulatoryAllele> negativeRegulatoryAlleles
+           ):
+
+    /*1.Properties of the cell*/
+
+//Fixed:
+    //i.Chemico-physical properties
+    m_permeabilityCell(permeability),                                   //Permeability of the cell membrane
+    m_allometryProductionAlpha(allometryProductionCoefficient),         //Allometry of energy production: how scale the production of energy per nutrient unit with cell volume
+    m_allometryBasalAlpha(allometryBasalCoefficient),                   //Allometry of basal metabolism: how scale the cost of basal metabolism with cell volume
+    m_etaNutrientToEnergy(30),                                          //Conversion rate between a nutrient and energy
+    m_etaNutrientToGarbage(etaNutrientToGarbage),                       //Conversion rate between a nutrient and a garbage
+    m_synthesisDuration(synthesisDuration),
+    m_metaboliteCost{metaboliteCost[0],metaboliteCost[1],metaboliteCost[2]},        //Cost for :{"Growth","Maintenance","Public goods"}
+
+//Variable:
+    //ii.Transcription rate of genes                                    //Further, these rates will rely on BSTF dynamics
+    m_tauGrowthGeneTranscription(tauGrowthGeneTranscription),
+    m_tauMaintenanceGeneTranscription(tauMaintenanceGeneTranscription),
+    m_tauPublicGoodsGeneTranscription(tauPublicGoodsGeneTranscription),
+    //iii.Traduction rate of transcripts
+    m_tauTraduction(tauTraduction),
+    //iv.Degradation rate of gene products
+    m_tauDegradationTranscript(tauDegradationTranscript),               //Same degradation rate for each transcript
+    m_tauDegradationProtein(tauDegradationProtein),                     //Same degradation rate for each protein
+    //v.Size of the cell
+    m_volumeCell(cellVolume),
+    m_timeSinceSynthesisBeginning(timeSinceSynthesisBeginning),
+
+    /*2.Content of the cell*/
+
+    //i.Energetic content
+    m_numberNutrientUnits(0),                                           //In a first time, nutrient units are immediately consumed
+    m_numberEnergyUnits(0),                                             //In a first time, energy units are immediately consumed
+    //ii.By-product content: garbage
+    m_numberGarbageUnits(numberGarbageUnits),
+    //iii.Transcripts content
+    m_numberGrowthTranscripts(numberGrowthTranscripts),
+    m_numberMaintenanceTranscripts(numberMaintenanceTranscripts),
+    m_numberPublicGoodsTranscripts(numberPublicGoodsTranscripts),
+    //iv.Proteins content
+    m_numberGrowthProteins(numberGrowthProteins),
+    m_numberMaintenanceProteins(numberMaintenanceProteins),
+    m_numberPublicGoodsProteins(numberPublicGoodsProteins),
+    //v.Maintenance metabolites content
+    m_numberMaintenanceMetabolites(numberMaintenanceMetabolites),
+    m_numberPublicGoodsMetabolites(numberPublicGoodsMetabolites),
+
+    /*3.Genetics*/
+
+    //i.Cell volume at mitosis
+    m_volumeProportionDescendant(volumeProportionDescendant),
+    m_garbageProportionDescendant(garbageProportionDescendant),
+    m_volumeCellMitosis(volumeCellMitosis),                              //In principle, should disappear when genes are defined.
+    m_growthAllele(growthAllele),
+    m_maintenanceAllele(maintenanceAllele),
+    m_publicGoodsAllele(publicGoodsAllele),
+    m_cellSizerAllele(cellSizerAllele)
+
+{
+    rnd=randomSimulation;
+    for (int g=0;g<10;g++){
+        m_numberTFTranscripts[g]=numberOtherTranscripts[g];
+        m_numberTranscriptionFactors[g]=numberOtherProteins[g];
+    }
+    for (int typeOfTFNumber=0;typeOfTFNumber<10;typeOfTFNumber++){
+        for (int physiologicalGene=0;physiologicalGene<14;physiologicalGene++){
+            m_connectivityMatrix[typeOfTFNumber][physiologicalGene]=0;
+        }
+        m_totalBindingSites[typeOfTFNumber]=0;
+    }
+    for (int typeTFnumber=0;typeTFnumber<5;typeTFnumber++){
+        m_positiveRegulatoryAlleles.push_back(positiveRegulatoryAlleles[typeTFnumber]);
+        m_negativeRegulatoryAlleles.push_back(negativeRegulatoryAlleles[typeTFnumber]);
+    }
+}
+
+
+// #Constructor using a full pre-defined cell# //
+
+Cell::Cell(gsl_rng *randomSimulation, const Cell& m_cell):
+    /*1.Properties of the cell*/
+
+//Fixed:
+    //i.Chemico-physical properties
+    m_permeabilityCell(m_cell.m_permeabilityCell),                                                 //Permeability of the cell membrane
+    m_allometryProductionAlpha(m_cell.m_allometryProductionAlpha),                                 //Allometry of energy production: how scale the production of energy per nutrient unit with cell volume
+    m_allometryBasalAlpha(m_cell.m_allometryBasalAlpha),                                           //Allometry of basal metabolism: how scale the cost of basal metabolism with cell volume
+    m_etaNutrientToEnergy(m_cell.m_etaNutrientToEnergy),                                           //Conversion rate between a nutrient and energy
+    m_etaNutrientToGarbage(m_cell.m_etaNutrientToGarbage),                                         //Conversion rate between a nutrient and a garbage
+    m_metaboliteCost{m_cell.m_metaboliteCost[0],m_cell.m_metaboliteCost[1],m_cell.m_metaboliteCost[2]},        //Cost for :{"Growth","Maintenance","Public goods"}
+    m_synthesisDuration(m_cell.m_synthesisDuration),
+
+//Variable:
+    //ii.Transcription rate of genes                                                               //Further, these rates will rely on BSTF dynamics
+    m_tauGrowthGeneTranscription(m_cell.m_tauGrowthGeneTranscription),
+    m_tauMaintenanceGeneTranscription(m_cell.m_tauMaintenanceGeneTranscription),
+    m_tauPublicGoodsGeneTranscription(m_cell.m_tauPublicGoodsGeneTranscription),
+    //iii.Traduction rate of transcripts
+    m_tauTraduction(m_cell.m_tauTraduction),
+    //iv.Degradation rate of gene products
+    m_tauDegradationTranscript(m_cell.m_tauDegradationTranscript),                                 //Same degradation rate for each transcript
+    m_tauDegradationProtein(m_cell.m_tauDegradationProtein),                                       //Same degradation rate for each protein
+    //v.Size of the cell
+    m_volumeCell(m_cell.m_volumeCell),
+    m_timeSinceSynthesisBeginning(m_cell.m_timeSinceSynthesisBeginning),
+
+    /*2.Content of the cell*/
+
+    //i.Energetic content
+    m_numberNutrientUnits(m_cell.m_numberNutrientUnits),                                           //In a first time, nutrient units are immediately consumed
+    m_numberEnergyUnits(m_cell.m_numberEnergyUnits),                                               //In a first time, energy units are immediately consumed
+    //ii.By-product content: garbage
+    m_numberGarbageUnits(m_cell.m_numberGarbageUnits),
+    //iii.Transcripts content
+    m_numberGrowthTranscripts(m_cell.m_numberGrowthTranscripts),
+    m_numberMaintenanceTranscripts(m_cell.m_numberMaintenanceTranscripts),
+    m_numberPublicGoodsTranscripts(m_cell.m_numberPublicGoodsTranscripts),
+    //iv.Proteins content
+    m_numberGrowthProteins(m_cell.m_numberGrowthProteins),
+    m_numberMaintenanceProteins(m_cell.m_numberMaintenanceProteins),
+    m_numberPublicGoodsProteins(m_cell.m_numberPublicGoodsProteins),
+    //v.Metabolites content
+    m_numberMaintenanceMetabolites(m_cell.m_numberMaintenanceMetabolites),
+    m_numberPublicGoodsMetabolites(m_cell.m_numberPublicGoodsMetabolites),
+
+    /*3.Genetics*/
+
+    //i.Cell volume at mitosis
+    m_volumeProportionDescendant(m_cell.m_volumeProportionDescendant),
+    m_garbageProportionDescendant(m_cell.m_garbageProportionDescendant),
+    m_volumeCellMitosis(m_cell.m_volumeCellMitosis),                                                //In principle, should disappear when genes are defined.
+
+    m_growthAllele(m_cell.m_growthAllele),
+    m_maintenanceAllele(m_cell.m_maintenanceAllele),
+    m_publicGoodsAllele(m_cell.m_publicGoodsAllele),
+    m_cellSizerAllele(m_cell.m_cellSizerAllele)
+
+{
+    rnd=randomSimulation;
+    for (int g=0;g<10;g++){
+        m_numberTFTranscripts[g]=m_cell.m_numberTFTranscripts[g];
+        m_numberTranscriptionFactors[g]=m_cell.m_numberTranscriptionFactors[g];
+    }
+    for (int typeOfTFNumber=0;typeOfTFNumber<10;typeOfTFNumber++){
+        for (int physiologicalGene=0;physiologicalGene<14;physiologicalGene++){
+            m_connectivityMatrix[typeOfTFNumber][physiologicalGene]=m_cell.m_connectivityMatrix[typeOfTFNumber][physiologicalGene];
+        }
+        m_totalBindingSites[typeOfTFNumber]=m_cell.m_totalBindingSites[typeOfTFNumber];
+    }
+    for (int typeTFnumber=0;typeTFnumber<5;typeTFnumber++){
+        m_positiveRegulatoryAlleles.push_back(m_cell.m_positiveRegulatoryAlleles[typeTFnumber]);
+        m_negativeRegulatoryAlleles.push_back(m_cell.m_negativeRegulatoryAlleles[typeTFnumber]);
+    }
+}
+
+Cell::~Cell()
+{
+    //delete[] rnd;  //Nothing to free;
+}
+
+
+void Cell::operator=(const Cell& m_cell)
+{
+    m_permeabilityCell=(m_cell.m_permeabilityCell);                                                 //Permeability of the cell membrane
+    m_allometryProductionAlpha=(m_cell.m_allometryProductionAlpha);                                 //Allometry of energy production: how scale the production of energy per nutrient unit with cell volume
+    m_allometryBasalAlpha=(m_cell.m_allometryBasalAlpha);                                           //Allometry of basal metabolism: how scale the cost of basal metabolism with cell volume
+    m_etaNutrientToEnergy=(m_cell.m_etaNutrientToEnergy);                                           //Conversion rate between a nutrient and energy
+    m_etaNutrientToGarbage=(m_cell.m_etaNutrientToGarbage);                                         //Conversion rate between a nutrient and a garbage
+    m_metaboliteCost[0]=m_cell.m_metaboliteCost[0];
+    m_metaboliteCost[1]=m_cell.m_metaboliteCost[1];
+    m_metaboliteCost[2]=m_cell.m_metaboliteCost[2];        //Cost for :{"Growth","Maintenance","Public goods"}
+    m_synthesisDuration=(m_cell.m_synthesisDuration);
+    
+    //Variable:
+    //ii.Transcription rate of genes                                                               //Further, these rates will rely on BSTF dynamics
+    m_tauGrowthGeneTranscription=(m_cell.m_tauGrowthGeneTranscription);
+    m_tauMaintenanceGeneTranscription=(m_cell.m_tauMaintenanceGeneTranscription);
+    m_tauPublicGoodsGeneTranscription=(m_cell.m_tauPublicGoodsGeneTranscription);
+    //iii.Traduction rate of transcripts
+    m_tauTraduction=(m_cell.m_tauTraduction);
+    //iv.Degradation rate of gene products
+    m_tauDegradationTranscript=(m_cell.m_tauDegradationTranscript);                                 //Same degradation rate for each transcript
+    m_tauDegradationProtein=(m_cell.m_tauDegradationProtein);                                       //Same degradation rate for each protein
+    //v.Size of the cell
+    m_volumeCell=(m_cell.m_volumeCell);
+    m_timeSinceSynthesisBeginning=(m_cell.m_timeSinceSynthesisBeginning);
+    
+    /*2.Content of the cell*/
+    
+    //i.Energetic content
+    m_numberNutrientUnits=(m_cell.m_numberNutrientUnits);                                           //In a first time, nutrient units are immediately consumed
+    m_numberEnergyUnits=(m_cell.m_numberEnergyUnits);                                               //In a first time, energy units are immediately consumed
+    //ii.By-product content: garbage
+    m_numberGarbageUnits=(m_cell.m_numberGarbageUnits);
+    //iii.Transcripts content
+    m_numberGrowthTranscripts=(m_cell.m_numberGrowthTranscripts);
+    m_numberMaintenanceTranscripts=(m_cell.m_numberMaintenanceTranscripts);
+    m_numberPublicGoodsTranscripts=(m_cell.m_numberPublicGoodsTranscripts);
+    //iv.Proteins content
+    m_numberGrowthProteins=(m_cell.m_numberGrowthProteins);
+    m_numberMaintenanceProteins=(m_cell.m_numberMaintenanceProteins);
+    m_numberPublicGoodsProteins=(m_cell.m_numberPublicGoodsProteins);
+    //v.Maintenance metabolites content
+    m_numberMaintenanceMetabolites=(m_cell.m_numberMaintenanceMetabolites);
+    m_numberPublicGoodsMetabolites=(m_cell.m_numberPublicGoodsMetabolites);
+    
+    /*3.Genetics*/
+    
+    //i.Cell volume at mitosis
+    m_volumeProportionDescendant=(m_cell.m_volumeProportionDescendant);
+    m_garbageProportionDescendant=(m_cell.m_garbageProportionDescendant);
+    m_volumeCellMitosis=(m_cell.m_volumeCellMitosis); //In principle, should disappear when genes are defined.
+    rnd=m_cell.rnd;
+    
+    for (int g=0;g<10;g++){
+        m_numberTFTranscripts[g]=m_cell.m_numberTFTranscripts[g];
+        m_numberTranscriptionFactors[g]=m_cell.m_numberTranscriptionFactors[g];
+    }
+    for (int typeOfTFNumber=0;typeOfTFNumber<10;typeOfTFNumber++){
+        for (int physiologicalGene=0;physiologicalGene<14;physiologicalGene++){
+            m_connectivityMatrix[typeOfTFNumber][physiologicalGene]=m_cell.m_connectivityMatrix[typeOfTFNumber][physiologicalGene];
+        }
+        m_totalBindingSites[typeOfTFNumber]=m_cell.m_totalBindingSites[typeOfTFNumber];
+    }
+    for (int typeTFnumber=0;typeTFnumber<5;typeTFnumber++){
+        m_positiveRegulatoryAlleles.push_back(m_cell.m_positiveRegulatoryAlleles[typeTFnumber]);
+        m_negativeRegulatoryAlleles.push_back(m_cell.m_negativeRegulatoryAlleles[typeTFnumber]);
+    }
+}
+
+void Cell::BuildDaughterCell(Cell& _cell)
+{
+    m_volumeCell=SAtoVconversion(VtoSAconversion(_cell.m_volumeCell)*m_volumeProportionDescendant);
+    _cell.m_volumeCell=SAtoVconversion(VtoSAconversion(_cell.m_volumeCell)*(1-m_volumeProportionDescendant));
+    m_timeSinceSynthesisBeginning=0;
+    _cell.m_timeSinceSynthesisBeginning=0;
+    
+    /*2.Content of the cell*/
+    
+    //i.Energetic content
+    m_numberNutrientUnits=0;                           //In a first time, nutrient units are immediately consumed
+    m_numberEnergyUnits=0;                             //In a first time, energy units are immediately consumed
+    //ii.By-product content: garbage
+    m_numberGarbageUnits=gsl_ran_binomial(rnd,_cell.m_garbageProportionDescendant,(int)_cell.m_numberGarbageUnits);
+    _cell.m_numberGarbageUnits-=m_numberGarbageUnits;
+    //iii.Transcripts content
+    m_numberGrowthTranscripts=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberGrowthTranscripts);
+    _cell.m_numberGrowthTranscripts-=m_numberGrowthTranscripts;
+    m_numberMaintenanceTranscripts=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberMaintenanceTranscripts);
+    _cell.m_numberMaintenanceTranscripts-=m_numberMaintenanceTranscripts;
+    m_numberPublicGoodsTranscripts=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberPublicGoodsTranscripts);
+    for (int TFnumber=0;TFnumber<10;TFnumber++){
+        m_numberTFTranscripts[TFnumber]=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberTFTranscripts[TFnumber]);
+        _cell.m_numberTFTranscripts[TFnumber]-=m_numberTFTranscripts[TFnumber];
+    }
+    //iv.Proteins content
+    m_numberGrowthProteins=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberGrowthProteins);
+    _cell.m_numberGrowthProteins-=m_numberGrowthProteins;
+    m_numberMaintenanceProteins=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberMaintenanceProteins);
+    _cell.m_numberMaintenanceProteins-=m_numberMaintenanceProteins;
+    m_numberPublicGoodsProteins=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberPublicGoodsProteins);
+    _cell.m_numberPublicGoodsProteins-=m_numberPublicGoodsProteins;
+    for (int TFnumber=0;TFnumber<10;TFnumber++){
+        m_numberTranscriptionFactors[TFnumber]=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberTranscriptionFactors[TFnumber]);
+    }
+    //v.Maintenance metabolites content
+    m_numberMaintenanceMetabolites=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberMaintenanceMetabolites);
+    _cell.m_numberMaintenanceMetabolites-=m_numberMaintenanceMetabolites;
+    m_numberPublicGoodsMetabolites=gsl_ran_binomial(rnd,_cell.m_volumeProportionDescendant,_cell.m_numberPublicGoodsMetabolites);
+    _cell.m_numberPublicGoodsMetabolites-=m_numberPublicGoodsMetabolites;
+    
+    /*3.Genetics*/
+    
+    //i.Cell volume at mitosis
+    m_volumeCellMitosis=(_cell.m_volumeCellMitosis);
+}
+
+/* ##Other methods## */
+
+
+    // #Printing the state of the cell# //
+
+void Cell::PrintCell(){
+    cout << m_permeabilityCell << endl;
+    cout << m_allometryProductionAlpha << endl;
+    cout << m_allometryBasalAlpha << endl;
+    cout << m_numberNutrientUnits << endl;
+    cout << m_volumeCell << endl;
+    cout << m_numberGarbageUnits << endl;
+    cout << "Connectivity matrix:" << endl;
+    for (int typeOfTFNumber=0;typeOfTFNumber<10;typeOfTFNumber++){
+        for (int physiologicalGene=0;physiologicalGene<14;physiologicalGene++){
+            cout << m_connectivityMatrix[typeOfTFNumber][physiologicalGene] << " ";
+        }
+        cout << endl;
+    }
+}
+
+    /* #Operations on the cell# */
+
+        /* #0.Binding site transcription factor connectivity evaluation# */
+/*
+void Cell::GeneEvaluateConnectivity(char geneType, int ) //method evaluating the connevtivity between one specific gene regulatory sequence and any transcription factor
+*/
+
+   
+void Cell::EvaluateBSTFConnectivity(){
+    
+    for (int typeOfTFNumber=0;typeOfTFNumber<5;typeOfTFNumber++){
+        m_connectivityMatrix[typeOfTFNumber][0]=m_growthAllele.BSTFMatchCount(m_positiveRegulatoryAlleles[typeOfTFNumber]);
+        m_connectivityMatrix[5+typeOfTFNumber][0]=m_growthAllele.BSTFMatchCount(m_negativeRegulatoryAlleles[typeOfTFNumber]);// A changer pour plus d'élégance.
+        
+        m_connectivityMatrix[typeOfTFNumber][1]=m_maintenanceAllele.BSTFMatchCount(m_positiveRegulatoryAlleles[typeOfTFNumber]);
+        m_connectivityMatrix[5+typeOfTFNumber][1]=m_maintenanceAllele.BSTFMatchCount(m_negativeRegulatoryAlleles[typeOfTFNumber]);// A
+        
+        m_connectivityMatrix[typeOfTFNumber][2]=m_publicGoodsAllele.BSTFMatchCount(m_positiveRegulatoryAlleles[typeOfTFNumber]);
+        m_connectivityMatrix[5+typeOfTFNumber][2]=m_publicGoodsAllele.BSTFMatchCount(m_negativeRegulatoryAlleles[typeOfTFNumber]);// A
+        
+        m_connectivityMatrix[typeOfTFNumber][3]=m_cellSizerAllele.BSTFMatchCount(m_positiveRegulatoryAlleles[typeOfTFNumber]);
+        m_connectivityMatrix[5+typeOfTFNumber][3]=m_cellSizerAllele.BSTFMatchCount(m_negativeRegulatoryAlleles[typeOfTFNumber]);// A
+        /*
+        for (int GeneTFNumber=0;GeneTFNumber<2;GeneTFNumber++){
+            m_connectivityMatrix[typeOfTFNumber][4+GeneTFNumber]=m_positiveRegulatoryAlleles[4+GeneTFNumber].BSTFMatchCount(m_positiveRegulatoryAlleles[typeOfTFNumber]);
+            m_connectivityMatrix[5+typeOfTFNumber][4+GeneTFNumber]=m_negativeRegulatoryAlleles[4+GeneTFNumber].BSTFMatchCount(m_negativeRegulatoryAlleles[typeOfTFNumber]);// A
+        }*/
+    }
+}
+
+        /* #1.Transcripts Production# */
+
+void Cell::TranscriptsDynamics(double delta_t){
+    if(m_numberGrowthTranscripts>0){
+    m_numberGrowthTranscripts-=gsl_ran_binomial(rnd,m_tauDegradationTranscript*delta_t,m_numberGrowthTranscripts);
+    }
+    else{}
+    m_numberGrowthTranscripts+=gsl_ran_poisson(rnd,m_tauGrowthGeneTranscription*delta_t);
+    //cout<<m_numberGrowthTranscripts<<endl;//not needed: just used to see if it works
+    if(m_numberMaintenanceTranscripts>0){
+    m_numberMaintenanceTranscripts-=gsl_ran_binomial(rnd,m_tauDegradationTranscript*delta_t,m_numberMaintenanceTranscripts);
+    }
+    else{}
+    m_numberMaintenanceTranscripts+=gsl_ran_poisson(rnd,m_tauMaintenanceGeneTranscription*delta_t);
+    if(m_numberPublicGoodsTranscripts>0){
+    m_numberPublicGoodsTranscripts-=gsl_ran_binomial(rnd,m_tauDegradationTranscript*delta_t,m_numberPublicGoodsTranscripts);
+    }
+    else{}
+    m_numberPublicGoodsTranscripts+=gsl_ran_poisson(rnd,m_tauPublicGoodsGeneTranscription*delta_t);
+}
+
+        /* #2.Proteins Production# */
+
+void Cell::ProteinsDynamics(double delta_t){
+    if(m_numberGrowthProteins>0){
+    m_numberGrowthProteins-=gsl_ran_binomial(rnd,m_tauDegradationProtein*delta_t,m_numberGrowthProteins);
+    }
+    else{}
+    if(m_numberGrowthTranscripts>0){
+    m_numberGrowthProteins+=gsl_ran_binomial(rnd,m_tauTraduction*delta_t,m_numberGrowthTranscripts);
+    }
+    //cout << m_numberGrowthProteins << endl;
+    if(m_numberMaintenanceProteins>0){
+    m_numberMaintenanceProteins-=gsl_ran_binomial(rnd,m_tauDegradationProtein*delta_t,m_numberMaintenanceProteins);
+    }
+    else{}
+    if(m_numberMaintenanceTranscripts>0){
+    m_numberMaintenanceProteins+=gsl_ran_binomial(rnd,m_tauTraduction*delta_t,m_numberMaintenanceTranscripts);
+    }
+    if(m_numberPublicGoodsProteins>0){
+    m_numberPublicGoodsProteins-=gsl_ran_binomial(rnd,m_tauDegradationProtein*delta_t,m_numberPublicGoodsProteins);
+    }
+    else{}
+    if(m_numberPublicGoodsTranscripts>0){
+    m_numberPublicGoodsProteins+=gsl_ran_binomial(rnd,m_tauTraduction*delta_t,m_numberPublicGoodsTranscripts);
+    }
+}
+
+        /* #3.Nutrient uptake# */
+
+            // #i.Standard nutrient uptake#
+int Cell::SetNutrientAfterStandardNutrientDiffusion(double delta_t, double concentrationNutrientStandard){
+    int nutrientUptake = m_permeabilityCell*VtoSAconversion(m_volumeCell)*delta_t*(concentrationNutrientStandard);
+    m_numberNutrientUnits+=nutrientUptake;
+    return (nutrientUptake);
+}
+            // #ii.Revealed nutrient uptake#
+int Cell::SetNutrientAfterRevealedNutrientDiffusion(double delta_t, double concentrationNutrientRevealed){
+    int nutrientUptake = m_permeabilityCell*VtoSAconversion(m_volumeCell)*delta_t*(concentrationNutrientRevealed);
+    m_numberNutrientUnits+=nutrientUptake;
+    //cout << nutrientUptake << endl;
+    return (nutrientUptake);
+}
+
+        /* #4.Energy Production and collateral Garbage production# */
+void Cell::EnergyProduction(){
+    m_numberGarbageUnits+=pow(m_etaNutrientToGarbage,m_allometryProductionAlpha)*m_numberNutrientUnits; //Note: Here, there's an allometric coefficient representing the mitochondrial efficiency in the nutrient treatment which may also be linked to their concentration.
+    m_numberEnergyUnits+=pow(m_etaNutrientToEnergy,m_allometryProductionAlpha)*m_numberNutrientUnits;   //Same allometric coefficient.
+    m_numberNutrientUnits=0;
+}
+
+        /* #5.Energy use# */
+
+            // #i.Withdrawal by the basal metabolism
+void Cell::BasalMetabolismWithdrawal(double SAcalibration,double m_basalMetabolismSAcalibration){
+    m_numberEnergyUnits-=m_basalMetabolismSAcalibration*pow(VtoSAconversion(m_volumeCell)/SAcalibration,m_allometryBasalAlpha);
+}
+
+                // #ii.a)Cell growth
+void Cell::Growth(int totalNumberProteins, int tauProductionMetabolites){
+    double growthFractionProteins=Proportion(m_numberGrowthProteins,totalNumberProteins);
+    if (m_metaboliteCost[0]!=0){
+        int numberPhospholipids(0);
+        if(totalNumberProteins!=0){
+            numberPhospholipids=((m_numberEnergyUnits/m_metaboliteCost[0])*growthFractionProteins);
+        }
+        if (numberPhospholipids>0){
+            //cout << numberPhospholipids << endl;
+            m_volumeCell=SAtoVconversion(VtoSAconversion(m_volumeCell)+numberPhospholipids*2*pow(10,-7));
+        }
+    }
+}
+
+                // #ii.b)Cell maintenance molecule production
+void Cell::MaintenanceMetabolitesProduction(int totalNumberProteins, int tauProductionMetabolites){
+    if(totalNumberProteins!=0){
+        double maintenanceFractionProteins=Proportion(m_numberMaintenanceProteins,totalNumberProteins);
+        if (m_metaboliteCost[1]!=0){
+            m_numberMaintenanceMetabolites=(m_numberEnergyUnits/m_metaboliteCost[1])*maintenanceFractionProteins;
+        }
+    }
+}
+
+                // #ii.c)Cell Public Goods production
+void Cell::PublicGoodsMetabolitesProduction(int totalNumberProteins, int tauProductionMetabolites){
+    if(totalNumberProteins!=0){
+        double publicGoodsFractionProteins=Proportion(m_numberPublicGoodsProteins,totalNumberProteins);
+        if (m_metaboliteCost[2]!=0){
+            m_numberPublicGoodsMetabolites=(m_numberEnergyUnits/m_metaboliteCost[2])*publicGoodsFractionProteins;
+            }
+        }
+    }
+
+            // #ii)Whole energy allocation process
+void Cell::EnergyAllocation(){
+    int totalNumberTraitProteins=m_numberGrowthProteins+m_numberMaintenanceProteins+m_numberPublicGoodsProteins;
+    int tauProductionMetabolites=1;
+    Growth(totalNumberTraitProteins,tauProductionMetabolites);
+    MaintenanceMetabolitesProduction(totalNumberTraitProteins,tauProductionMetabolites);
+    PublicGoodsMetabolitesProduction(totalNumberTraitProteins,tauProductionMetabolites);
+    m_numberEnergyUnits=0;
+}
+
+        /* #6.Phenotype effects */
+
+            // #i.Maintenance metabolites effect# //
+//Analytical expression should by far be preferred in order to minimize modelling time.
+void Cell::GarbageNeutralization(double K_garbageNeutralization,double delta_t){
+    cout << "concentration metabolites:" << ConcentrationCalculus(m_numberMaintenanceMetabolites,m_volumeCell) << endl;
+    cout << "concentration garbages:" << ConcentrationCalculus(m_numberGarbageUnits,m_volumeCell) << endl;
+    double timeStepNeutralizedGarbage(0);
+    int stepNumber=100;
+    for (int t=1; t<=stepNumber;t++){
+    timeStepNeutralizedGarbage= (K_garbageNeutralization*ConcentrationCalculus(m_numberMaintenanceMetabolites,m_volumeCell)*ConcentrationCalculus(m_numberGarbageUnits,m_volumeCell)*delta_t/stepNumber);
+    //cout << "Garbage neutralized:" << timeStepNeutralizedGarbage << endl;
+    m_numberMaintenanceMetabolites-=timeStepNeutralizedGarbage*m_volumeCell;
+    m_numberGarbageUnits-=timeStepNeutralizedGarbage*m_volumeCell;
+    }
+    cout << "concentration metabolites post:" << ConcentrationCalculus(m_numberMaintenanceMetabolites,m_volumeCell) << endl;
+}
+
+            // #ii.Public goods release# //
+int Cell::PublicgoodsRelease(){
+    int numberPublicGoodsReleased=m_numberPublicGoodsMetabolites;
+    m_numberPublicGoodsMetabolites=0;
+    return(numberPublicGoodsReleased);
+}
+
+        /* #7.Mitosis checking */
+
+            // #i.Checking if mitosis checkpoint reached#
+bool Cell::ReplicationCheckpoint(){
+    return(m_volumeCell>m_volumeCellMitosis);
+}
+
+            // #ii.Processing of DNA synthesis#
+void Cell::SynthesisProcessing(){
+    if (ReplicationCheckpoint()){
+        //cout << m_timeSinceSynthesisBeginning << endl;
+        m_timeSinceSynthesisBeginning+=1;
+    }
+}
+
+            // #iii.Checking if mitosis checkpoint reached#
+bool Cell::MitosisCheckpoint(){
+    return (m_timeSinceSynthesisBeginning==m_synthesisDuration);
+}
+
+bool Cell::MitosisTriggering(){
+    //cout << m_timeSinceSynthesisBeginning << endl;
+    SynthesisProcessing();
+    return (MitosisCheckpoint());
+}
+
+
+        /* #8.Death checking */
+bool Cell::DeathTest(double delta_t){
+    long double concentrationGarbageUnits=ConcentrationCalculus(m_numberGarbageUnits,m_volumeCell);
+    double survivalProbability=pow(exp(-concentrationGarbageUnits/(pow(10,10)*1/100)),20.0/3600);
+    int deathTest=gsl_ran_binomial(rnd, survivalProbability, 1);
+    return(deathTest==0);
+}
+
+    /* #Getting the settings# */
+
+double Cell::GetPermeabilityCell(){
+    return(m_permeabilityCell);
+}
+
+double Cell::GetAllometryProductionAlpha(){
+    return(m_allometryProductionAlpha);
+}
+
+double Cell::GetAllometryBasalAlpha(){
+    return(m_allometryBasalAlpha);
+}
+
+double Cell::GetEtaNutrientToGarbage(){
+    return(m_etaNutrientToGarbage);
+}
+
+double Cell::GetTauGrowthGeneTranscription(){
+    return(m_tauGrowthGeneTranscription);
+}
+
+double Cell::GetTauMaintenanceGeneTranscription(){
+    return(m_tauMaintenanceGeneTranscription);
+}
+
+double Cell::GetTauPublicGoodsGeneTranscription(){
+    return(m_tauPublicGoodsGeneTranscription);
+}
+
+double Cell::GetTauDegradationTranscript(){
+    return(m_tauDegradationTranscript);
+}
+
+double Cell::GetTauDegradationProtein(){
+    return(m_tauDegradationProtein);
+}
+
+int Cell::GetMetaboliteCost(int p){
+    return(m_metaboliteCost[p]);
+}
+
+double Cell::GetVolumeCell(){
+    return(m_volumeCell);
+}
+
+long int Cell::GetNumberGarbageUnits(){
+    return(m_numberGarbageUnits);
+}
+
+int Cell::GetTranscripts(char t){
+    if (t=='g'){
+        return(m_numberGrowthTranscripts);
+    }
+    else if (t=='m'){
+        return(m_numberMaintenanceTranscripts);
+    }
+    else if (t=='p'){
+        return(m_numberPublicGoodsTranscripts);
+    }
+    else{
+        return(0);
+    }
+}
+
+int Cell::GetTFTranscripts(int g){
+        return(m_numberTFTranscripts[g]);
+}
+
+int Cell::GetProteins(char t){
+    if (t=='g'){
+        return(m_numberGrowthProteins);
+    }
+    else if (t=='m'){
+        return(m_numberMaintenanceProteins);
+    }
+    else if (t=='p'){
+        return(m_numberPublicGoodsProteins);
+    }
+    else{
+        return(0);
+    }
+}
+
+int Cell::GetTranscriptionFactors(int g){
+        return(m_numberTranscriptionFactors[g]);
+}
+
+//May be provisory getting the size of the cell at mitosis
+
+double Cell::GetMitosisSize(){
+    return(m_volumeCellMitosis);
+}
+
+void Cell::SetGarbageUnits(double numberGarbageunits){
+    m_numberGarbageUnits+=numberGarbageunits;
+}
+
+//General methods out of the class
+
+double VtoSAconversion(double V_cell){
+    return pow((V_cell*V_cell*36*M_PI),1.0/3);
+}
+
+double SAtoVconversion(double SA_cell){
+    return pow(SA_cell,3.0/2)/(6*pow(M_PI,1.0/2));
+}
+           
+long double ConcentrationCalculus(double MoleculeNumber, double CellVolume){
+    return(MoleculeNumber/CellVolume);
+}
+           
+double Proportion(double sub, double total){
+    return(sub/total);
+}
+           

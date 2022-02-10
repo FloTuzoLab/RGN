@@ -1,0 +1,48 @@
+//
+//  Allele.hpp
+//  Cell_Evolution
+//
+//  Created by Florian on 19/03/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#ifndef Allele_hpp
+#define Allele_hpp
+
+#include <iostream>
+#include <cstdlib>
+#include <string>
+
+#include <math.h>
+#include <gsl/gsl_rng.h>
+#include <gsl/gsl_randist.h>
+#include <random>
+
+class Allele
+{
+    
+public:
+    void TFBSMatchTesting();
+    void RegulatorySequenceMutation();
+protected:
+    char m_regulatorySequence[1000];
+    double m_mutationRate;
+    /* 7.Random generator */
+    gsl_rng * rnd;//(pseudo) random number used in the processing for the diferent draws.
+};
+
+class RegulatoryGene : public Allele
+{
+public:
+    void BindingSiteRecognitionMutation();
+    
+private:
+    char m_bindingSequence[8];
+};
+
+class PhysiologicalGene : public Allele
+{
+    
+};
+
+#endif /* Allele_hpp */

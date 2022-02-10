@@ -1,0 +1,84 @@
+//
+//  main.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 16/02/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+
+#include "Ecosystem.hpp"
+
+using namespace std;
+
+int main() {
+    Medium medium1(600,100,1);
+    Compartiment compa1(pow(10,3), pow(10,3), 0, 5);
+    Compartiment compa2(0, 100, 10, 5);//Concentrations in
+    Compartiment compa3(0,0,1000,0);
+    Cell cell1;
+    int lengthRegulatorySequences(1000);
+    string sequence1;
+    int simulationNumber(1);
+    gsl_rng *Random=gsl_rng_alloc(gsl_rng_default);
+    gsl_rng_set(Random, simulationNumber);
+    for(int pos=0;pos<lengthRegulatorySequences;pos++){
+        int drawResult=gsl_ran_flat(Random, 0, 4);
+        if (drawResult<1){
+            sequence1.push_back('A');
+        }
+        else if (drawResult<2){
+            sequence1.push_back('C');
+        }
+        else if (drawResult<3){
+            sequence1.push_back('G');
+        }
+        else{
+            sequence1.push_back('T');
+        }
+    }
+    Allele allele1(sequence1,1);
+    allele1.PrintAllele();
+    //cout << sequence1 << endl;
+    
+    //compa1.PrintState();
+    
+    double delta_t(1);
+    
+    //cell1.PrintCell();
+    
+    DonutPuddle donutpuddle1(simulationNumber,100,delta_t,pow(10,2),3,3,compa1,compa2,5,cell1);
+    
+    //FinitePuddle finitepuddle1(simulationNumber,1000,1,pow(10,4),3,3,compa1,compa2,3,cell1);
+    //SeabedPuddle seabedpuddle1(1000,1,pow(10,4),10,10,compa1,compa2,compa3);
+    
+    donutpuddle1.PrintPuddle();
+    //finitepuddle1.PrintPuddle();
+    //seabedpuddle1.PrintPuddle(true);
+    
+    for (int t=1;t<=1000;t++)
+    {
+        donutpuddle1.TimeStepInsidePuddle(delta_t);
+        donutpuddle1.DiffusionBetweenCompartments();
+    }
+    
+    donutpuddle1.PrintPuddle();
+ 
+    /*
+    for (int t=1;t<=3600*10;t++)
+    {
+    donutpuddle1.DiffusionBetweenCompartments();
+    
+    //seabedpuddle1.DiffusionBetweenCompartments();
+    }
+    donutpuddle1.PrintPuddle(false);
+    //finitepuddle1.PrintPuddle(false);
+    //seabedpuddle1.PrintPuddle(true);
+     */
+    gsl_rng_free(Random);
+}
+
+
+    
+
+

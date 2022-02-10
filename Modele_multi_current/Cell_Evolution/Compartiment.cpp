@@ -1,0 +1,473 @@
+//
+//  Compartiment.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 16/02/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#include "Compartiment.hpp"
+
+using namespace std;
+
+/* ###Generic functions### */
+
+double AvogadroConstant=6.02*pow(10.0,23); //unit: molecules number
+
+    /* ## Calculus of the volume of a cube## */
+
+        double VolumeCalculus(double length, double height){
+            return pow(length,2)*height;
+        }
+
+/* ###Methods### */
+
+
+    /* ##Constructors## */
+
+
+// #I Default constructor# //
+Compartiment::Compartiment():
+
+            /* 1.References of the compartment and its neighbours */
+            //i.References of the compartment
+
+            /* 2.Compartment shape characterization */
+            m_length(pow(10,2)), //Length of the cube in unit:micrometers
+            m_height(pow(10,2)),
+
+            /* 3.Compartment chemical properties */
+
+            //i.Diffusion properties
+            m_medium(pow(10,-6),pow(10,1),0), //unit: micrometers^2.s^(-1) and propotion of cells leaving the compartment by passive diffusion
+            m_KcommonGoodsKinetics(pow(10,4)),
+
+            //ii.Compartment concentrations
+            m_concentrationNutrientStandard(200*pow(10,-1)), //unit:mol.micrometers^(-3) (valeur à revoir)
+            m_concentrationNutrientHidden(1000*pow(10,-6)), //unit:mol.micrometers^(-3)
+            m_concentrationNutrientRevealed(0), //unit:mol.micrometers^(-3)
+            m_concentrationCommonGoods(0)
+            {
+                /* 1.References of the compartment and its neighbours */
+                m_labelCompartment=new int[2];
+                
+                m_labelCompartment[0]=0;
+                m_labelCompartment[1]=0;
+                
+                //ii.References of the neighbours
+                m_labelNeighbours=new int*[4];
+                for (int i=0;i<=3;i++){
+                    m_labelNeighbours[i]=new int[2];
+                }
+                
+                for (int i=0;i<=3;i++){
+                    for (int k=0;k<=1;k++){
+                        m_labelNeighbours[i][k]=0;
+                    }
+                }
+            }
+
+
+// #II Half constructor: prior specificaiton of the reference, length, or medium# //
+Compartiment::Compartiment(double length,
+                           double height,
+                           double concentrationNutrientStandard,
+                           double concentrationNutrientHidden,
+                           double concentrationNutrientRevealed,
+                           double concentrationCommonGoods,
+                           Medium medium,
+                           double KcommonGoodsKinetics):
+            /* 1.References of the compartment and its neighbours */
+            //i.References of the compartment
+            //m_labelCompartment(new int [2]{0,0}),
+
+            /* 2.Compartment shape characterization */
+            m_length(length), //Length of the cube in unit:decimeters
+            m_height(height),
+
+            /* 3.Compartment chemical properties */
+
+            //i.Diffusion properties
+
+            m_medium(medium), //unit: decimeters^2.s^(-1)
+            m_KcommonGoodsKinetics(KcommonGoodsKinetics),
+
+            //ii.Compartment concentrations
+            m_concentrationNutrientStandard(concentrationNutrientStandard), //unit:mol.micrometers^(-3) (valeur à revoir)
+            m_concentrationNutrientHidden(concentrationNutrientHidden), //unit:mol.micrometers^(-3)
+            m_concentrationNutrientRevealed(concentrationNutrientRevealed), //unit:mol.micrometers^(-3)
+            m_concentrationCommonGoods(concentrationCommonGoods)
+            {
+                /* 1.References of the compartment and its neighbours */
+                m_labelCompartment=new int[2];
+                
+                m_labelCompartment[0]=0;
+                m_labelCompartment[1]=0;
+                //ii.References of the neighbours
+                m_labelNeighbours=new int*[4];
+                for (int i=0;i<=3;i++){
+                    m_labelNeighbours[i]=new int[2];
+                }
+                
+                for (int i=0;i<=3;i++){
+                    for (int k=0;k<=1;k++){
+                        m_labelNeighbours[i][k]=0;
+                    }
+                }
+                
+            }
+
+
+// #III Complete definition constructor: no pre-specification, even for the type of neighbouring relationships# //
+Compartiment::Compartiment(int reference[2],
+                           double const length,
+                           double height,
+                           Medium medium,
+                           double KcommonGoodsKinetics,
+                           double concentrationNutrientStandard,
+                           double concentrationNutrientHidden,
+                           double concentrationNutrientRevealed,
+                           double concentrationCommonGoods):
+            /* 2.Compartment shape characterization */
+            m_length(length), //same as above but defined by the user
+            m_height(height),
+
+            /* 3.Compartment chemical properties */
+
+            //i.Diffusion properties
+            m_medium(medium),
+        m_KcommonGoodsKinetics(KcommonGoodsKinetics),
+
+            //ii.Compartment concentrations
+            m_concentrationNutrientStandard(concentrationNutrientStandard),
+            m_concentrationNutrientHidden(concentrationNutrientHidden),
+            m_concentrationNutrientRevealed(concentrationNutrientRevealed),
+            m_concentrationCommonGoods(concentrationCommonGoods)
+            {
+                /* 1.References of the compartment and its neighbours */
+                //i.References of the compartment
+                int r1 = reference[0];
+                int r2 = reference[1];
+                m_labelCompartment=new int[2];
+                m_labelCompartment[0]=r1;
+                m_labelCompartment[1]=r2;
+    
+                //ii.References of the neighbours
+                if (m_labelCompartment[0]==0 && m_labelCompartment[1]>0){
+                    m_labelNeighbours=new int*[3];
+                    m_labelNeighbours[0]=new int[2];
+                    m_labelNeighbours[0][0]=r1+1;
+                    m_labelNeighbours[0][1]=r2;
+                    
+                    m_labelNeighbours[1]=new int[2];
+                    m_labelNeighbours[1][0]=r1;
+                    m_labelNeighbours[1][1]=r2-1;
+                    
+                    m_labelNeighbours[2]=new int[2];
+                    m_labelNeighbours[2][0]=r1;
+                    m_labelNeighbours[2][1]=r2;
+                }
+    
+                else if(m_labelCompartment[1]==0 && m_labelCompartment[0]>0){
+                    m_labelNeighbours=new int*[3];
+                    m_labelNeighbours[0]=new int[2];
+                    m_labelNeighbours[0][0]=r1-1;
+                    m_labelNeighbours[0][1]=r2;
+                    
+                    m_labelNeighbours[1]=new int[2];
+                    m_labelNeighbours[1][0]=r1+1;
+                    m_labelNeighbours[1][1]=r2;
+                    
+                    m_labelNeighbours[2]=new int[2];
+                    m_labelNeighbours[2][0]=r1;
+                    m_labelNeighbours[2][1]=r2+1;
+                }
+    
+                else if(m_labelCompartment[0]>0 && m_labelCompartment[1]>0){
+                    m_labelNeighbours=new int*[4];
+                    m_labelNeighbours[0]=new int[2];
+                    m_labelNeighbours[0][0]=r1-1;
+                    m_labelNeighbours[0][1]=r2;
+                    
+                    m_labelNeighbours[1]=new int[2];
+                    m_labelNeighbours[1][0]=r1+1;
+                    m_labelNeighbours[1][1]=r2;
+                    
+                    m_labelNeighbours[2]=new int[2];
+                    m_labelNeighbours[2][0]=r1;
+                    m_labelNeighbours[2][1]=r2-1;
+                    
+                    m_labelNeighbours[3]=new int[2];
+                    m_labelNeighbours[3][0]=r1;
+                    m_labelNeighbours[3][1]=r2+1;
+                }
+            }
+
+
+// #IV Constructor using a pre-defined compartment# //
+Compartiment::Compartiment(const Compartiment& m_compartiment):
+
+    /* 2.Compartment shape characterization */
+    m_length(m_compartiment.m_length), //same as above but defined by the user
+    m_height(m_compartiment.m_height),
+
+    /* 3.Compartment chemical properties */
+
+    //i.Diffusion properties
+    m_medium(m_compartiment.m_medium),
+
+    //ii.Compartment concentrations
+    m_concentrationNutrientStandard(m_compartiment.m_concentrationNutrientStandard),
+    m_concentrationNutrientHidden(m_compartiment.m_concentrationNutrientHidden),
+    m_concentrationNutrientRevealed(m_compartiment.m_concentrationNutrientRevealed),
+    m_concentrationCommonGoods(m_compartiment.m_concentrationCommonGoods)
+    {
+        /* 1.References of the compartment and its neighbours */
+        //i.References of the compartment
+        m_labelCompartment=new int[2];
+        m_labelCompartment[0]=m_compartiment.m_labelCompartment[0];
+        m_labelCompartment[1]=m_compartiment.m_labelCompartment[1];
+        
+        //ii.References of the neighbours
+        if (m_labelCompartment[0]==0 && m_labelCompartment[1]>0){
+            m_labelNeighbours=new int*[3];
+            m_labelNeighbours[0]=new int[2];
+            m_labelNeighbours[1]=new int[2];
+            m_labelNeighbours[2]=new int[2];
+        }
+    
+        else if(m_labelCompartment[1]==0 && m_labelCompartment[0]>0){
+            m_labelNeighbours=new int*[3];
+            m_labelNeighbours[0]=new int[2];
+            m_labelNeighbours[1]=new int[2];
+            m_labelNeighbours[2]=new int[2];
+        }
+    
+        else{
+            m_labelNeighbours=new int*[4];
+            m_labelNeighbours[0]=new int[2];
+            m_labelNeighbours[1]=new int[2];
+            m_labelNeighbours[2]=new int[2];
+            m_labelNeighbours[3]=new int[2];
+            for (int i=0;i<=3;i++){
+                for (int k=0;k<=1;k++){
+                    m_labelNeighbours[i][k]=m_compartiment.m_labelNeighbours[i][k];
+                }
+            }
+        }
+}
+
+void Compartiment::operator=(const Compartiment& _compartment)
+{   if (this != & _compartment){
+    delete[] m_labelCompartment;
+    for (int i=0;i<=3;i++){
+        delete[] m_labelNeighbours[i];
+    }
+    delete[] m_labelNeighbours;
+    }
+    m_length=(_compartment.m_length); //same as above but defined by the user
+    m_height=(_compartment.m_height);
+    
+    /* 3.Compartment chemical properties */
+    
+    //i.Diffusion properties
+    m_medium=(_compartment.m_medium);
+    
+    //ii.Compartment concentrations
+    m_concentrationNutrientStandard=(_compartment.m_concentrationNutrientStandard);
+    m_concentrationNutrientHidden=(_compartment.m_concentrationNutrientHidden);
+    m_concentrationNutrientRevealed=(_compartment.m_concentrationNutrientRevealed);
+    m_concentrationCommonGoods=(_compartment.m_concentrationCommonGoods);
+    
+    /* 1.References of the compartment and its neighbours */
+    //i.References of the compartment
+    
+    m_labelCompartment=new int[2];
+    m_labelCompartment[0]=0;
+    m_labelCompartment[1]=0;
+    
+    //ii.References of the neighbours
+    if (m_labelCompartment[0]==0 && m_labelCompartment[1]>0){
+        m_labelNeighbours=new int*[3];
+        m_labelNeighbours[0]=new int[2];
+        m_labelNeighbours[1]=new int[2];
+        m_labelNeighbours[2]=new int[2];
+    }
+    
+    else if(m_labelCompartment[1]==0 && m_labelCompartment[0]>0){
+        m_labelNeighbours=new int*[3];
+        m_labelNeighbours[0]=new int[2];
+        m_labelNeighbours[1]=new int[2];
+        m_labelNeighbours[2]=new int[2];
+    }
+    
+    else{
+        m_labelNeighbours=new int*[4];
+        m_labelNeighbours[0]=new int[2];
+        m_labelNeighbours[1]=new int[2];
+        m_labelNeighbours[2]=new int[2];
+        m_labelNeighbours[3]=new int[2];
+        for (int i=0;i<=3;i++){
+            for (int k=0;k<=1;k++){
+            m_labelNeighbours[i][k]=0;
+            }
+        }
+    }
+}
+
+
+/* ##Destructor## */
+Compartiment::~Compartiment()
+{
+    for (int i=0;i<=3;i++){
+        delete[] m_labelNeighbours[i];
+    }
+    delete[] m_labelNeighbours;
+    delete[] m_labelCompartment;
+}
+
+/* ##Other methods## */
+
+
+// #Setting the settings# //
+void Compartiment::SetReference(int r1, int r2){
+    m_labelCompartment[0]=r1;
+    m_labelCompartment[1]=r2;
+}
+
+void Compartiment::SetNeighboursRelationships(int numNeighbour,int r1, int r2){
+    m_labelNeighbours[numNeighbour][0]=r1;
+    m_labelNeighbours[numNeighbour][1]=r2;
+}
+
+void Compartiment::SetMedium(double diffusionNutrients, double diffusionCommonGoods, double diffusionCells){
+    m_medium.SetDiffusionNutrients(diffusionNutrients);
+    m_medium.SetDiffusionCommonGoods(diffusionCommonGoods);
+    m_medium.SetDiffusionCells(diffusionCells);
+}
+
+void Compartiment::SetConcentrationNutrientStandard(double a){
+    m_concentrationNutrientStandard=a;
+}
+
+void Compartiment::SetConcentrationNutrientHidden(double a){
+    m_concentrationNutrientHidden=a;
+}
+
+void Compartiment::SetConcentrationNutrientRevealed(double a){
+    m_concentrationNutrientRevealed=a;
+}
+
+void Compartiment::SetConcentrationCommonGoods(double a){
+    m_concentrationCommonGoods=a;
+}
+
+
+/* #Getting the settings# */
+int Compartiment::GetNeighbour(int numNeighbour, int numCoordinate) const{
+    return m_labelNeighbours[numNeighbour][numCoordinate];
+}
+
+double Compartiment::GetDiffusionNutrients() const{
+    return(m_medium.GetDiffusionNutrients());
+}
+
+double Compartiment::GetDiffusionCommonGoods() const{
+    return(m_medium.GetDiffusionCommonGoods());
+}
+
+double Compartiment::GetDiffusionCells() const{
+    return(m_medium.GetDiffusionCells());
+}
+
+double Compartiment::GetConcentrationNutrientStandard() const{
+    return (m_concentrationNutrientStandard);
+}
+
+double Compartiment::GetConcentrationNutrientHidden() const{
+    return(m_concentrationNutrientHidden);
+}
+
+double Compartiment::GetConcentrationNutrientRevealed() const{
+    return(m_concentrationNutrientRevealed);
+}
+
+double Compartiment::GetConcentrationCommonGoods() const{
+    return(m_concentrationCommonGoods);
+}
+
+double Compartiment::GetHeight() const{
+    return(m_height);
+}
+
+
+// #Printing of the compartment state# //
+void Compartiment::PrintState(){
+    cout<<"Reference:(";
+    cout<<m_labelCompartment[0]<<","<<m_labelCompartment[1]<<")"<<endl;
+    if (m_labelCompartment[0]==0 && m_labelCompartment[1]==0){
+        cout<<"Featuring the outside environment, the outside compartment is neighbouring any other compartment. Isn't that obvious, poor fellow?"<<endl;
+    }
+    
+    else if(m_labelCompartment[0]==0 || m_labelCompartment[1]==0){
+        for (int l=0; l<3;l++){
+            cout<<"Neighbours references:(";
+            cout<<m_labelNeighbours[l][0]<<","<<m_labelNeighbours[l][1]<<")"<<endl;
+        }
+        cout<<"Only given as a piece of information and, for some king of elegance, I guess. Absolutely useless for the simulations, isn't it?"<<endl;
+    }
+    
+    else{
+        for (int l=0; l<4;l++){
+            cout<<"Neighbours references:(";
+            cout<<m_labelNeighbours[l][0]<<","<<m_labelNeighbours[l][1]<<")"<<endl;
+        }
+    }
+    
+    cout<<"Length:"<<m_length<<endl;
+    m_medium.Afficher();
+    cout<<"Standard nutrient concentration:"<<m_concentrationNutrientStandard<<endl;
+    cout<<"Hidden nutrient concentration:"<<m_concentrationNutrientHidden<<endl;
+    cout<<"Revealed nutrient concentration:"<<m_concentrationNutrientRevealed<<endl;
+    cout<<"Common goods concentration:"<<m_concentrationCommonGoods<<endl;
+    cout<<"Volume:"<<Volume()<<endl;
+}
+
+// #Operations on the compartment# //
+
+//i.Depletion of a compartment by one of the cell located in it
+void Compartiment::DepleteCompartment(map <string,double> &totalNutrientBalance, double membranePermeability,double totalMembraneSurface, double delta_t){
+    totalNutrientBalance["Standard Nutrient"]=(1-exp(-(membranePermeability*totalMembraneSurface/Volume())*delta_t))*m_concentrationNutrientStandard*Volume()*AvogadroConstant;
+    totalNutrientBalance["Revealed Nutrient"]=(1-exp(-(membranePermeability*totalMembraneSurface/Volume())*delta_t))*m_concentrationNutrientRevealed*Volume()*AvogadroConstant;
+    m_concentrationNutrientStandard=exp(-(membranePermeability*totalMembraneSurface/Volume())*delta_t)*m_concentrationNutrientStandard;
+    m_concentrationNutrientRevealed=exp(-(membranePermeability*totalMembraneSurface/Volume())*delta_t)*m_concentrationNutrientRevealed;
+} //une map permet d'associer des éléments n'étant pas de même nature: which unit is used here?
+
+//ii.Enrichment of a compartment by one of the cell located in it
+void Compartiment::EnrichCompartment(double numberPublicGoodsReleased,double numberStandardNutrientsReleased, double numberRevealedNutrientsReleased){
+    m_concentrationCommonGoods+=numberPublicGoodsReleased/(Volume()*AvogadroConstant);
+    m_concentrationNutrientStandard+=numberStandardNutrientsReleased/(Volume()*AvogadroConstant);
+    m_concentrationNutrientRevealed+=numberRevealedNutrientsReleased/(Volume()*AvogadroConstant);
+}
+
+//iii.Transformation of the hidden nutrient in revealed nutrient by Common Goods
+void Compartiment::HiddenNutrientBalance(double delta_t){
+    double timeStepConcentrationRevealed;
+    if ((m_concentrationNutrientHidden*exp(m_KcommonGoodsKinetics*delta_t*(m_concentrationNutrientHidden-m_concentrationCommonGoods))-m_concentrationCommonGoods)!=0){
+        timeStepConcentrationRevealed= m_concentrationCommonGoods*m_concentrationNutrientHidden*(exp(m_KcommonGoodsKinetics*delta_t*(m_concentrationNutrientHidden-m_concentrationCommonGoods))-1)/(m_concentrationNutrientHidden*exp(m_KcommonGoodsKinetics*delta_t*(m_concentrationNutrientHidden-m_concentrationCommonGoods))-m_concentrationCommonGoods);
+    }
+    else{
+        timeStepConcentrationRevealed=(m_KcommonGoodsKinetics*m_concentrationCommonGoods*m_concentrationNutrientHidden*delta_t);
+    }
+    m_concentrationNutrientRevealed+=timeStepConcentrationRevealed;
+    m_concentrationNutrientHidden-=timeStepConcentrationRevealed;
+    m_concentrationCommonGoods-=timeStepConcentrationRevealed;
+}
+
+
+/* ###Generic functions### */
+
+/* ## Calculus of the volume of a cube## */
+double Compartiment::Volume(){
+    return VolumeCalculus(m_length,m_height);
+}

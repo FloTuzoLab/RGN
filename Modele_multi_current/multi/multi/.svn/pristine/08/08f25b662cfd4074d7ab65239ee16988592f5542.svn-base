@@ -1,0 +1,105 @@
+//
+//  Puddle.hpp
+//  Cell_Evolution
+//
+//  Created by Florian on 19/02/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#ifndef DEF_PUDDLE
+#define DEF_PUDDLE
+
+#include "Compartiment.hpp"
+#include "Cell.hpp"
+#include <vector>
+#include <deque>
+
+class Puddle{
+    
+public:
+    
+    /* ###Methods### */
+    
+    
+        /* ##Constructors## */
+    
+    
+            // #Default constructor# //
+            Puddle(int simulationNumber, int length,int width);
+    
+            // #Total-free constructor# //
+    Puddle(int simulationNumber, bool cellSizerCycle, double delta_t, double delta_l, int timeStepRatio, int length, int width, bool adjacencyNeed,Compartiment insideCompartment, Compartiment outsideCompartment, int initialNumberCell, Cell cell,std::ofstream* _fileoutcompartments,std::ofstream* _fileoutcells);
+    
+    
+        /* ##Destructor## */
+    
+        ~Puddle(); //Deletion of a puddle, useful because two pointers are used here
+    
+    
+        /* ##Other methods## */
+    
+            /* #Print the state of the puddle# */
+            void PrintPuddle(); //adjacent mesh contains lateral outside compartments influencing the inside of the studied puddle.
+    
+            /* #Processing in the puddle# */
+    
+            /* #1.Nutrient diffuson towards cells# */
+            int StandardNutrientDiffusionTowardsCell(int c,double delta_t);
+            int RevealedNutrientDiffusionTowardsCell(int c,double delta_t);
+            /* #2.Birth-death definition# */
+                //i.Birth of a cell
+                bool CellReproduction(int cell); //Not yet defined
+                //ii.Death of a cell
+                void CellDeath(int cell); //Not yet defined
+            /* #3.Processing of a time-step in a compartement# */
+            void TimeStepInsidePuddle(int t_current, double delta_t); //Compartment time step proceedings
+        void OutputGetting(int simulationNumber,int t_output);
+    
+            /* ## Final.Processing of a time-step in the puddle */
+            //void TimeStepPuddle(); //Puddle time step proceedings need to be defined
+    
+protected:
+    
+    /* ##Attributes## */
+    
+        /* 1.Dimensions of the puddle */
+        int const m_lengthInside;
+        int const m_widthInside;
+        // Need for an adjacent mesh
+        bool m_adjacencyNeed;
+    
+        /* 2.Creation of a puddle as a double pointer, each pointer of pointer containing a compartment as if it was an array */
+        Compartiment **m_puddle;//Pointer on a compartment of the environment//
+    
+        /* 3.Initialization of the neighbours for each of the compartment in the puddle */
+        int ****m_neighbours;
+    
+        /* 4.Definition of the parameters for diffusion, function of time step, length of a compartment and diffusion coefficients */
+        double m_alphaDF[4][2]; //m_alpha[x][0] represents inside 
+        double m_cellDiffusionRate;
+    
+        /* 5.Creation of a dynamic vector containing the cells living in the ecosystem at a given timestep */
+        bool m_cellSizerCycle;
+        std::vector <Cell> m_cell;
+        double m_permeabilityCell; //Defined at the level of the puddle where diffusion takes place, and once and for all because this does not evolve in the model
+    
+        /* 6.Creation of a dynmic vector of dynamic vector containing any of the living cell compartment position */
+        std::vector < std::vector < int > > m_positionCell;
+    
+        /* 7.Creation of an integer storing the ratio between gene products dynamics and other processes*/
+        int m_timeStepRatio;
+    
+        /* 8.Creation of a pointer containing a random number*/
+        gsl_rng * _SimuRandom_;
+    
+        /* 9.Pointer on files */
+        std::ofstream* fileoutcompartments;
+        std::ofstream* fileoutcells;
+};
+
+    /* ###Generic functions### */
+
+        /* #Definition of the Explicit Finite Differences operator# */
+        double OperatorFiniteDifferencesExplicit(double alpha, double c, int nbNeighbours, double n1,double n2,double n3,double n4,double n5,double n6);
+
+#endif /* Puddle_hpp */

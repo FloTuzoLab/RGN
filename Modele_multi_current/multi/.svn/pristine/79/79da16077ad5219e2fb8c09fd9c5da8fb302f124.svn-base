@@ -1,0 +1,178 @@
+//
+//  main.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 16/02/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+
+#include "Ecosystem.hpp"
+
+using namespace std;
+
+int main() {
+    
+    // Generation of 14 regulatory sequences //
+    int lengthRegulatorySequences(1000);
+    int lengthBindingSites(8);
+    const int numberTF=10;
+    const int numberSequence=14;
+    string sequence1[numberSequence];
+    string bindingsite1[numberTF];
+    int simulationNumber(3);
+    gsl_rng *Random=gsl_rng_alloc(gsl_rng_default);
+    gsl_rng_set(Random, simulationNumber);
+    for (int seq=0;seq<numberSequence;seq++){
+        for(int pos=0;pos<lengthRegulatorySequences;pos++){
+            int drawResult=gsl_ran_flat(Random, 0, 4);
+            if (drawResult<1){
+                sequence1[seq].push_back('A');
+            }
+            else if (drawResult<2){
+                sequence1[seq].push_back('C');
+            }
+            else if (drawResult<3){
+                sequence1[seq].push_back('G');
+            }
+            else{
+                sequence1[seq].push_back('T');
+            }
+        }
+    }
+    for (int TFnumber=0;TFnumber<numberTF;TFnumber++){
+        for(int pos=0;pos<lengthBindingSites;pos++){
+            int drawResult=gsl_ran_flat(Random, 0, 4);
+            if (drawResult<1){
+                bindingsite1[TFnumber].push_back('A');
+            }
+            else if (drawResult<2){
+                bindingsite1[TFnumber].push_back('C');
+            }
+            else if (drawResult<3){
+                bindingsite1[TFnumber].push_back('G');
+            }
+            else{
+                bindingsite1[TFnumber].push_back('T');
+            }
+        }
+    }
+    //Redefinition of the first gene(Growth) in order to test and to be sure that it has binding sites for transcription factors.
+    
+    sequence1[0].replace(0,bindingsite1[0].length(),bindingsite1[0]);
+    sequence1[0].replace(125,bindingsite1[0].length(),bindingsite1[0]);
+    sequence1[3].replace(150,bindingsite1[8].length(),bindingsite1[8]);
+    sequence1[7].replace(300,bindingsite1[9].length(),bindingsite1[9]);
+    
+        
+    // Initialization of the objects //
+        
+    Medium medium1(600,100,1);
+    Compartiment compa1_1(0, 0, 0, 0);
+    Compartiment compa1_2(1000, 100, 10, 5);//Concentrations in
+    Compartiment compa1_3(0,0,1000,0);
+    
+    PhysiologicalAllele growthallele1(sequence1[0],1,true);
+    PhysiologicalAllele maintenanceallele1(sequence1[1],1,true);
+    PhysiologicalAllele publicgoodsallele1(sequence1[2],1,true);
+    PhysiologicalAllele cellsizer1(sequence1[3],1,true);
+    std::vector <RegulatoryAllele> positivetranscriptionfactors1;
+    std::vector <RegulatoryAllele> negativetranscriptionfactors1;
+    
+    for (int TFnumber=0;TFnumber<5;TFnumber++){
+        RegulatoryAllele randompositiveTranscriptionFactor(sequence1[TFnumber+4],1,bindingsite1[TFnumber],'A');
+        RegulatoryAllele randomnegativeTranscriptionFactor(sequence1[TFnumber+9],1,bindingsite1[TFnumber+5],'R');
+        positivetranscriptionfactors1.push_back(randompositiveTranscriptionFactor);
+        negativetranscriptionfactors1.push_back(randomnegativeTranscriptionFactor);
+    }
+        //
+    //cellsizer1.BSTFMatchCount(transcriptionfactors1[8]);
+    
+    //transcriptionfactors1[0].PrintRegulatoryAllele();
+    //cout << sequence1 << endl;
+    int metabolitescost[3]{1,100,1};
+    
+    Cell cell1(pow(10,-1),
+               pow(10,-2),
+               pow(10,0),                      //permeabilityCell
+               1,                               //allometryProductionAlpha
+               1,                               //allometryBasalAlpha
+               1,                               //etaNutrientToGarbage
+               100,                             //synthesisDuration
+               0.1,                             //tauTranscriptionOncePolymeraseBound
+               0.005,                             //basalBindingProbabilityPolymerase
+               0.5,                               //enhancedBindingProbabilityPolymerase
+               5,                               //tauTraduction
+               0.001,                            //tauDegradationTranscript
+               0.01,                            //tauDegradationProtein
+               metabolitescost,                      //metabolites cost
+               /*int numberGarbageUnits,*/
+               100,                             //cellVolume
+               /*int numberGrowthTranscripts,
+                int numberMaintenanceTranscripts,
+                int numberPublicGoodsTranscripts,
+                int numberOtherTranscripts [10],
+                int numberGrowthProteins,
+                int numberMaintenanceProteins,
+                int numberPublicGoodsProteins,
+                int numberMaintenanceMetabolites,
+                int numberPublicGoodsMetabolites,
+                int numberOtherProteins [10],*/
+                0.5,                            //volumeProportionDescendant
+                0.5,                            //garbageProportionDescendant
+                500,                            //volumeCellMitosis
+                growthallele1,
+                maintenanceallele1,
+                publicgoodsallele1,
+                cellsizer1,
+                positivetranscriptionfactors1,
+                negativetranscriptionfactors1
+               );
+    
+    double delta_t(0.1);
+    /*
+    cout << sequence1[7] << endl;
+    cout << bindingsite1[9] << endl;
+    std::size_t found=sequence1[7].find(bindingsite1[9]);
+    cout << found << endl;
+     */
+    //cell1.PrintCell();
+    
+    DonutPuddle donutpuddle1(simulationNumber,100,delta_t,pow(10,2),2,2,compa1_1,compa1_2,5,cell1);
+    
+    //FinitePuddle finitepuddle1(simulationNumber,1000,1,pow(10,4),3,3,compa1,compa2,3,cell1);
+    //SeabedPuddle seabedpuddle1(1000,1,pow(10,4),10,10,compa1,compa2,compa3);
+    
+    donutpuddle1.PrintPuddle();
+    //finitepuddle1.PrintPuddle();
+    //seabedpuddle1.PrintPuddle(true);
+    
+    double T_simu=501;
+    int simu_stepNumber=T_simu/delta_t;
+    
+    for (int t=1;t<=simu_stepNumber;t++)
+    {
+        donutpuddle1.TimeStepInsidePuddle(delta_t);
+        donutpuddle1.DiffusionBetweenCompartments();
+    }
+    
+    donutpuddle1.PrintPuddle();
+ 
+    /*
+    for (int t=1;t<=3600*10;t++)
+    {
+    donutpuddle1.DiffusionBetweenCompartments();
+    
+    //seabedpuddle1.DiffusionBetweenCompartments();
+    }
+    donutpuddle1.PrintPuddle(false);
+    //finitepuddle1.PrintPuddle(false);
+    //seabedpuddle1.PrintPuddle(true);
+     */
+    gsl_rng_free(Random);
+}
+
+
+    
+
+

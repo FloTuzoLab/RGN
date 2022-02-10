@@ -1,0 +1,310 @@
+//
+//  Puddle.cpp
+//  Cell_Evolution
+//
+//  Created by Florian on 19/02/2018.
+//  Copyright © 2018 Florian. All rights reserved.
+//
+
+#include "Puddle.hpp"
+
+
+using namespace std;
+
+/* ###Methods### */
+
+
+    /* ##Constructors## */
+
+
+        // #Default constructor# //
+Puddle::Puddle(int simulationNumber, int length,int width):m_lengthInside(length),m_widthInside(width),m_puddle()
+{
+    _SimuRandom_=gsl_rng_alloc(gsl_rng_default);
+    gsl_rng_set(_SimuRandom_, simulationNumber);
+}
+
+        // #Total-free constructor# //
+
+Puddle::Puddle(int simulationNumber, bool cellSizerCycle, double delta_t, double delta_l, int timeStepRatio, int lengthPuddle,int widthPuddle, bool adjacencyNeed, Compartiment insideCompartment, Compartiment outsideCompartment, int initialNumberCell, Cell cell):m_lengthInside(lengthPuddle),m_widthInside(widthPuddle),m_adjacencyNeed(adjacencyNeed),m_cellSizerCycle(cellSizerCycle)
+{
+    /* Incipit.Initialization of the random number */
+    _SimuRandom_=gsl_rng_alloc(gsl_rng_default);
+    gsl_rng_set(_SimuRandom_, simulationNumber);
+    m_timeStepRatio=timeStepRatio;
+    double heightPuddle=insideCompartment.GetHeight();
+    
+    /* 1.Need or need not for a mesh with adjacent squares */
+    if (m_adjacencyNeed){
+        m_puddle=new Compartiment*[m_lengthInside+2];
+        for (int i=0;i<=m_lengthInside+1;i++){
+            m_puddle[i]=new Compartiment[m_widthInside+2];
+        }
+    }
+    
+    else{
+        m_puddle=new Compartiment*[m_lengthInside+1];
+        m_puddle[0]=new Compartiment[1];
+        for (int i=1;i<=m_lengthInside;i++){
+            m_puddle[i]=new Compartiment[m_widthInside+1];
+        }
+    }
+    
+    /* 2.Inital definition of compartments */
+    if (m_adjacencyNeed){
+        for (int i=0;i<=m_lengthInside+1;i++){
+            for (int j=0;j<=m_widthInside+1;j++){
+                m_puddle[i][j]=Compartiment(insideCompartment);
+                m_puddle[i][j].SetReference(i,j);
+            }
+        }
+    }
+    else{
+    m_puddle[0][0]=Compartiment(outsideCompartment);
+        for (int i=1;i<=m_lengthInside;i++){
+            for (int j=1;j<=m_widthInside;j++){
+                m_puddle[i][j]=Compartiment(insideCompartment);
+                m_puddle[i][j].SetReference(i,j);
+            }
+        }
+    }
+    /* 3.Definition of the first cells in the puddle */
+    Cell initCell(cell,m_cellSizerCycle, _SimuRandom_);
+    for (int n_c=0;n_c<initialNumberCell;n_c++){
+        m_cell.push_back(initCell);
+        int newPosition[2];
+        newPosition[0]=gsl_ran_flat(_SimuRandom_, 1, m_lengthInside+1);
+        newPosition[1]=gsl_ran_flat(_SimuRandom_,1,m_widthInside+1);
+        m_positionCell.push_back({newPosition[0],newPosition[1]});
+    }
+    m_permeabilityCell=initCell.GetPermeabilityCell();
+    
+    for (int n_c=0;n_c<initialNumberCell;n_c++){
+        m_cell[n_c].EvaluateBSTFConnectivity();
+    }
+    
+    /* 4.Definition of the spatio-temporal diffusivity coefficients for one timestep */
+    
+        //i)Inside dissfusivity
+    m_alphaDF[0][0]=delta_t/pow(delta_l,2)*insideCompartment.GetDiffusionNutrients();      //Diffusivity of standard nutrient of any compartment; could have been defined ahead of the loops on the compartments because the compartments have the same physical properties.
+    m_alphaDF[1][0]=delta_t/pow(delta_l,2)*insideCompartment.GetDiffusionNutrients();      //Diffusivity of hidden nutrient of any compartment
+    m_alphaDF[2][0]=delta_t/pow(delta_l,2)*insideCompartment.GetDiffusionNutrients();      //Diffusivity of revealed nutrient of any compartment
+    m_alphaDF[3][0]=delta_t/pow(delta_l,2)*insideCompartment.GetDiffusionCommonGoods();    //Diffusivity of common goods of any compartment
+        //i)Outside diffusivity
+    m_alphaDF[0][1]=delta_t/pow(heightPuddle,2)*insideCompartment.GetDiffusionNutrients();      //Diffusivity of standard nutrient of any compartment; could have been defined ahead of the loops on the compartments because the compartments have the same physical properties.
+    m_alphaDF[1][1]=delta_t/pow(heightPuddle,2)*insideCompartment.GetDiffusionNutrients();      //Diffusivity of hidden nutrient of any compartment
+    m_alphaDF[2][1]=delta_t/pow(heightPuddle,2)*insideCompartment.GetDiffusionNutrients();      //Diffusivity of revealed nutrient of any compartment
+    m_alphaDF[3][1]=delta_t/pow(heightPuddle,2)*insideCompartment.GetDiffusionCommonGoods();    //Diffusivity of common goods of any compartment
+    
+    m_cellDiffusionRate=delta_t/pow(delta_l,2)*insideCompartment.GetDiffusionCells();
+}
+
+Puddle::~Puddle(){
+    gsl_rng_free(_SimuRandom_);
+    if (m_adjacencyNeed){
+    for (int i=0;i<=m_lengthInside+1;i++){
+        delete[] m_puddle[i];
+        }
+    }
+    
+    else{
+    for (int i=0;i<=m_lengthInside;i++){
+        delete[] m_puddle[i];
+        }
+    }
+    delete[] m_puddle;
+    //*/
+}
+
+/* ##Other methods## */
+
+
+    /* #Processing in the puddle# */
+
+        /* #1.Nutrient diffuson towards cells# */
+/*            // # Standard nutrient diffusion
+int Puddle::StandardNutrientDiffusionTowardsCell(int c,double delta_t){
+    int StandardNutrientSwallowedByCellC=m_cell[c].SetNutrientAfterStandardNutrientDiffusion(delta_t, m_puddle[m_positionCell[c][0]][m_positionCell[c][1]].GetConcentrationNutrientStandard()); //Uptake of nutrients by the c-ieth cell
+    return(StandardNutrientSwallowedByCellC);
+    // Depletion of the compartment in which the c-ieth cell is located
+}
+
+            // # Revealed nutrient diffusion
+int Puddle::RevealedNutrientDiffusionTowardsCell(int c,double delta_t){
+    int RevealedNutrientSwallowedByCellC=m_cell[c].SetNutrientAfterRevealedNutrientDiffusion(delta_t, m_puddle[m_positionCell[c][0]][m_positionCell[c][1]].GetConcentrationNutrientRevealed()); //Uptake of nutrients by the c-ieth cell
+    return(RevealedNutrientSwallowedByCellC);
+    // Depletion of the compartment in which the c-ieth cell is located
+}
+*/
+/* #2.Birth-death definition# */
+
+            //i.Replication of a cell
+bool Puddle::CellReproduction(int cell){
+    // #a. Cell reroduction # //
+        // # Duplication of the cell
+        Cell daughterCell(m_cell[cell]);
+        m_cell.push_back(daughterCell);
+        m_positionCell.push_back({m_positionCell[cell][0],m_positionCell[cell][1]}); //The new cell takes the same location than that of its mother.
+        // # Segregation of gene products # //
+        m_cell[m_cell.size()-1].BuildDaughterCell(m_cell[cell]);
+        // # Processing of survival to mitosis and checking mutations effect for both cells: half-conservative reproduction# //
+        if (m_cell[m_cell.size()-1].MitosisFailure()){
+            CellDeath((int) m_cell.size()-1);
+        }
+        else{
+            m_cell[m_cell.size()-1].MutationProcessing();
+        }
+        if (m_cell[cell].MitosisFailure()){
+            CellDeath(cell);
+            return(false);
+        }
+        else{
+            m_cell[cell].MutationProcessing();
+            return(true);
+        }
+    
+}
+
+            //ii.Death of a cell
+void Puddle::CellDeath(int cell){
+    m_cell.erase(m_cell.begin()+cell); //cell removal
+    m_positionCell.erase(m_positionCell.begin()+cell); // cell position removal
+ }
+
+        /* #3.Processing of a time-step in a compartement# */
+void Puddle::TimeStepInsidePuddle(int t_current, double delta_t){
+    
+    /*##Initialization##*/
+    map <string,double> totalNutrientDepleted[m_lengthInside+1][m_widthInside+1];
+    vector <string> typeofNutrient;
+    typeofNutrient.push_back("Standard Nutrient");
+    typeofNutrient.push_back("Revealed Nutrient");
+    int numberTypeofNutrient=(int) typeofNutrient.size();
+    for (int compartmentLengthPosition=1;compartmentLengthPosition<=m_lengthInside;compartmentLengthPosition++){
+        for (int compartmentWidthPosition=1;compartmentWidthPosition<=m_widthInside;compartmentWidthPosition++){
+            for (int _typeofNutrient=0;_typeofNutrient<numberTypeofNutrient;_typeofNutrient++){
+                totalNutrientDepleted[compartmentLengthPosition][compartmentWidthPosition].insert({pair <string,double> (typeofNutrient[_typeofNutrient],0)});
+            }
+        }
+    }
+    double totalMembraneSurface[m_lengthInside+1][m_widthInside+1];
+    double PublicGoodsReleased[m_lengthInside+1][m_widthInside+1];
+    double StandardNutrientsReleased[m_lengthInside+1][m_widthInside+1];
+    double RevealedNutrientsReleased[m_lengthInside+1][m_widthInside+1];
+    for (int l=1;l<=m_lengthInside;l++){
+        for (int w=1;w<=m_widthInside;w++){
+            PublicGoodsReleased[l][w]=0;
+            StandardNutrientsReleased[l][w]=0;
+            RevealedNutrientsReleased[l][w]=0;
+            totalMembraneSurface[l][w]=0;
+        }
+    }
+    /*O. Whole compartment depletions calculus */ //Note: allows to use an analytical expression preventing numerical instabilities
+    int numberOfCellsBeforeTimestep=(int) m_cell.size();
+    // #Total cell membrane surface in a compartment# //
+    for (int cell=0; cell<numberOfCellsBeforeTimestep;cell++){
+        totalMembraneSurface[m_positionCell[cell][0]][m_positionCell[cell][1]]+=m_cell[cell].GetSACell()*pow(10,-10);
+        
+    }
+    
+    for (int compartmentLengthPosition=1;compartmentLengthPosition<=m_lengthInside;compartmentLengthPosition++){
+        for (int compartmentWidthPosition=1;compartmentWidthPosition<=m_widthInside;compartmentWidthPosition++){
+            m_puddle[compartmentLengthPosition][compartmentWidthPosition].DepleteCompartment(totalNutrientDepleted[compartmentLengthPosition][compartmentWidthPosition], m_permeabilityCell, totalMembraneSurface[compartmentLengthPosition][compartmentWidthPosition], delta_t);
+        }
+    }
+    for (int delta_t_current=0; delta_t_current< delta_t; delta_t_current++){
+        /*I.Birth-Life-Death Processing*/
+        for (int cell=0; cell<numberOfCellsBeforeTimestep;cell++){
+            /*Nutrient uptake by the cell-ieth cell*/
+        
+            m_cell[cell].SetNutrientsAfterNutrientDiffusion(totalMembraneSurface[m_positionCell[cell][0]][m_positionCell[cell][1]],totalNutrientDepleted[m_positionCell[cell][0]][m_positionCell[cell][1]]["Standard Nutrient"], totalNutrientDepleted[m_positionCell[cell][0]][m_positionCell[cell][1]]["Revealed Nutrient"]);
+            //cout << m_cell[cell].GetNumberGarbageUnits();
+        
+            /* 1.Death process in the puddle */
+        
+            if (m_cell[cell].DeathTest(delta_t)){
+                CellDeath(cell);
+                cell--;
+                numberOfCellsBeforeTimestep--;
+                //cout << "TEST2" << endl;
+            }
+            /* 2.Different outcomes of cell processing depending on the size of the cell*/
+            else{
+                //cout << "TEST2" << endl;
+                /*Birth of a cell if mitosis checkpoint reached*/
+                if (m_cell[cell].MitosisCheckpoint()){  //
+                    if(CellReproduction(cell)){
+                    }
+                    else{
+                        cell--;
+                        numberOfCellsBeforeTimestep--;
+                    }
+                }
+            
+                else{
+                    /*Cell processing*/
+                    if (t_current%m_timeStepRatio==0){
+                    m_cell[cell].TranscriptsDynamics(delta_t*m_timeStepRatio);
+                    m_cell[cell].ProteinsDynamics(delta_t*m_timeStepRatio);
+                    }
+                    
+                    m_cell[cell].EnergyProduction();
+                    m_cell[cell].GarbageNeutralization(pow(10,2), delta_t);
+                    m_cell[cell].BasalMetabolismCalculus(delta_t);
+                    m_cell[cell].BasalMetabolismWithdrawal();
+                    m_cell[cell].EnergyAllocation();
+                    PublicGoodsReleased[m_positionCell[cell][0]][m_positionCell[cell][1]]+=m_cell[cell].PublicgoodsRelease();
+                    StandardNutrientsReleased[m_positionCell[cell][0]][m_positionCell[cell][1]]+=m_cell[cell].StandardNutrientRelease();
+                    RevealedNutrientsReleased[m_positionCell[cell][0]][m_positionCell[cell][1]]+=m_cell[cell].RevealedNutrientRelease();
+                    /*Cell processing stopped here if DNA synthesis not yet triggered, i.e. cell too small*/
+                    /*Replication of the strand if replication checkpoint reached but synthesis not completed*/
+                    if(m_cell[cell].ReplicationCheckpoint()){
+                        m_cell[cell].SynthesisProcessing(delta_t);
+                    }
+                }
+            }
+        }
+        /*II. Enrichment of a compartment resulting from the release and further interaction of Public Goods */
+        for (int l=1;l<=m_lengthInside;l++){
+            for (int w=1;w<=m_widthInside;w++){
+                cout << "compartmentenrich:" << StandardNutrientsReleased[l][w] << endl;
+                m_puddle[l][w].EnrichCompartment(PublicGoodsReleased[l][w],StandardNutrientsReleased[l][w],RevealedNutrientsReleased[l][w]);
+                m_puddle[l][w].HiddenNutrientBalance(pow(10,-5), delta_t);
+            }
+        }
+    }
+}
+
+
+//Printing the puddle features//
+void Puddle::PrintPuddle()
+{
+    
+    cout<<"Outside puddle definition:"<<endl;
+    m_puddle[0][0].PrintState();
+    if (m_adjacencyNeed)
+    {
+    cout<<"Lateral puddle definition:"<<endl;
+    m_puddle[0][1].PrintState();
+    }
+    cout<<"Length Puddle:"<<m_lengthInside<<endl;
+    cout<<"Width puddle:"<<m_widthInside<<endl;
+    
+    for (int i=1;i<=m_lengthInside;i++)
+    {
+        for (int j=1;j<=m_widthInside;j++)
+        {
+            //cout<<"Type de compartiment du compartiment: ("<<i<<","<<j<<")"<<endl;
+            m_puddle[i][j].PrintState();
+        }
+    }
+   
+    cout << "Number of cells: " << m_cell.size() << endl;
+    for (int c=1;c<=m_cell.size();c++)
+        {
+            cout << "Cell n°" << c << endl;
+            m_cell[c-1].PrintCell();
+            cout << "Position:" << m_positionCell[c-1][0] << "," << m_positionCell[c-1][1] << endl;
+            cout << endl;
+        }
+}
